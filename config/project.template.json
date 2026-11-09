@@ -1,0 +1,9 @@
+{
+  "frontend": { "title": "Super AI 工程基础", "apiBaseUrl": "http://127.0.0.1:8000" },
+  "analytics": { "public": false, "key": "" },
+  "database": { "url": "sqlite+aiosqlite:///./var/memory.sqlite3" },
+  "llm": { "provider": "", "apiKey": "" },
+  "cls": { "secretId": "", "secretKey": "" },
+  "mcp": { "url": "", "secret": "" },
+  "minio": { "endpoint": "", "accessKey": "", "secretKey": "" }
+}

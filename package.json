@@ -1,0 +1,35 @@
+{
+  "name": "super-ai-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=10"
+  },
+  "workspaces": [
+    "apps/frontend",
+    "packages/api-contracts",
+    "docs"
+  ],
+  "overrides": {
+    "vite": "^6.4.4"
+  },
+  "scripts": {
+    "contracts:typecheck": "npm run typecheck --workspace @super-ai/api-contracts",
+    "contracts:test": "npm run test --workspace @super-ai/api-contracts",
+    "frontend:dev": "npm run dev --workspace @super-ai/frontend",
+    "frontend:typecheck": "npm run typecheck --workspace @super-ai/frontend",
+    "frontend:test": "npm run test --workspace @super-ai/frontend",
+    "frontend:build": "npm run build --workspace @super-ai/frontend",
+    "frontend:security": "node scripts/check-public-config.mjs",
+    "frontend:desktop": "node scripts/check-desktop.mjs",
+    "foundation:test": "node --test scripts/foundation.test.mjs",
+    "docs:dev": "npm run dev --workspace @super-ai/docs",
+    "docs:build": "npm run build --workspace @super-ai/docs",
+    "docs:preview": "npm run preview --workspace @super-ai/docs",
+    "docs:security": "node scripts/check-docs-security.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
+  }
+}

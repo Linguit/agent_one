@@ -1,0 +1,29 @@
+schema: spec-driven
+
+context: |
+  P01 只建立安全工程基础，不实现认证、聊天、知识库、AIOps、MCP。
+  目录：apps/backend、apps/frontend、packages/api-contracts、config、infra、scripts、openspec、docs。
+  后端：Python >=3.10、FastAPI、Pydantic v2、uv、hatchling、src layout、SQLAlchemy 2 async、aiosqlite、Alembic、pytest、pytest-asyncio、Ruff、strict Pyright。
+  pytest asyncio_mode=auto；Ruff line-length=100、target py310、规则 B/E/F/I/UP。
+  包位于 apps/backend/src/super_ai，只允许 from super_ai...，禁止 src.super_ai。
+  Agent/AI：LangChain 1.x create_agent、LangGraph、langchain-openai、langchain-mcp-adapters、MCP、pymilvus 3、rank-bm25、pypdf、langchain-text-splitters、httpx；业务能力由后续提案实现。
+  前端：Vue 3.5、Vite 6、TypeScript 5.6 strict、exactOptionalPropertyTypes、noUncheckedIndexedAccess、isolatedModules、ES2022/Bundler resolution、Pinia 3、Vue Router 4、Vitest 2、marked、DOMPurify、lucide-vue-next。
+  仓库：npm workspaces、OpenSpec spec-driven workflow、VitePress 文档、Conventional Commits。
+  只提交两份空凭据模板；project.json 后以 user.project.json 递归深合并，不读 OS 环境变量作为项目配置。
+  通用加载器在 P01 建立；P06 只增加 LLM typed validation/provider。测试注入临时配置。
+  前端禁止导入完整 JSON，只能注入 frontend.title、frontend.apiBaseUrl 和 public=true 的 analytics.key。
+  LLM、CLS、MCP、MinIO secret 不得进入 bundle。导入期间不得读取本机配置或连接外部服务。
+  tenant_id 未来由可信认证上下文提供；真实 MCP 验收不可用 mock 冒充。
+  Compose 仅托管 etcd、MinIO、Milvus、Attu、Alertmanager；前后端与官方 CLS MCP Server 在主机运行。
+  P01 不创建 app.Dockerfile、project.compose.json 或应用 Compose 服务。禁止 filter-repo/force push 迁移设计。
+  文档正文使用简体中文，桌面 Web 验收；全部门禁通过后同步 delta specs 并归档。
+
+rules:
+  proposal:
+    - 明确目标、非目标与新增能力，不宣称未实现功能。
+  design:
+    - 记录技术栈、安全配置、导入副作用与基础设施边界。
+  specs:
+    - 正文使用简体中文，保留 CLI 必需结构标记，每项要求至少一个可验收场景。
+  tasks:
+    - 使用编号复选框，包含测试、构建、sentinel 扫描、桌面验收、规范同步和归档。

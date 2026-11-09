@@ -1,0 +1,31 @@
+{
+  "name": "@super-ai/frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "vue-tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
+    "test": "vitest run",
+    "build": "npm run typecheck && vite build"
+  },
+  "dependencies": {
+    "@super-ai/api-contracts": "*",
+    "vue": "~3.5.0",
+    "pinia": "^3.0.0",
+    "vue-router": "^4.5.0",
+    "marked": "^15.0.0",
+    "dompurify": "^3.2.0",
+    "lucide-vue-next": "^0.468.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@vitejs/plugin-vue": "^5.2.0",
+    "@vue/test-utils": "^2.4.6",
+    "jsdom": "^25.0.0",
+    "typescript": "~5.6.3",
+    "vite": "^6.0.0",
+    "vitest": "^2.1.0",
+    "vue-tsc": "~2.2.0"
+  }
+}

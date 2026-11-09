@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "types": ["node"], "lib": ["ES2022"] },
+  "include": ["vite.config.ts", "vitest.config.ts", "build/**/*.ts"]
+}
