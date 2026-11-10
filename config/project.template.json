@@ -1,9 +1,33 @@
 {
+  "app": { "name": "Super AI" },
+  "backend": { "host": "127.0.0.1", "port": 8000 },
   "frontend": { "title": "Super AI 工程基础", "apiBaseUrl": "http://127.0.0.1:8000" },
   "analytics": { "public": false, "key": "" },
   "database": { "url": "sqlite+aiosqlite:///./var/memory.sqlite3" },
-  "llm": { "provider": "", "apiKey": "" },
+  "llm": {
+    "provider": "qwen",
+    "apiKey": "",
+    "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "rerankUrl": "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank",
+    "chatModel": "qwen3.7-max",
+    "temperature": 0.2,
+    "timeout": 120,
+    "retries": 2
+  },
+  "modelCapabilities": { "qwen3.7-max": { "contextWindowTokens": 1000000 } },
+  "vectorStore": { "endpoint": "", "token": "" },
   "cls": { "secretId": "", "secretKey": "" },
   "mcp": { "url": "", "secret": "" },
-  "minio": { "endpoint": "", "accessKey": "", "secretKey": "" }
+  "minio": { "endpoint": "", "accessKey": "", "secretKey": "" },
+  "clsMcpServer": { "url": "" },
+  "prometheusAlerts": { "url": "" },
+  "clsLogUpload": { "endpoint": "", "topicId": "" },
+  "aiopsDemo": {
+    "backendBaseUrl": "http://127.0.0.1:8000",
+    "email": "",
+    "displayName": "",
+    "password": "",
+    "pollIntervalSeconds": 5,
+    "indexWaitSeconds": 60
+  }
 }

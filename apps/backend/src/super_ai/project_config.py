@@ -24,9 +24,13 @@ def deep_merge(base: JsonObject, override: JsonObject) -> JsonObject:
     return result
 
 
-def _read_object(path: Path) -> JsonObject:
+def _read_object(path: Path, *, optional: bool = False) -> JsonObject:
     try:
         value: object = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        if optional:
+            return {}
+        raise ConfigError(f"缺少基础配置文件：{path.name}") from None
     except (OSError, UnicodeError, json.JSONDecodeError):
         raise ConfigError(f"无法读取合法 JSON 配置：{path.name}") from None
     if not isinstance(value, dict):
@@ -42,5 +46,5 @@ def load_project_config(config_dir: Path | None = None) -> JsonObject:
     directory = config_dir if config_dir is not None else default_config_dir()
     base = _read_object(directory / "project.json")
     user_path = directory / "user.project.json"
-    override = _read_object(user_path) if user_path.exists() else {}
+    override = _read_object(user_path, optional=True)
     return deep_merge(base, override)
