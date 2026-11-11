@@ -17,6 +17,7 @@ dependencies = [
   "pwdlib[argon2]>=0.2,<1",
   "langchain-openai>=1,<2",
   "httpx>=0.27,<1",
+  "pymilvus>=3,<4",
 ]
 
 [dependency-groups]

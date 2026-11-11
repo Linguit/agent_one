@@ -83,3 +83,53 @@ test('未跟踪的新文件也满足 diff 空白规则', () => {
     assert.ok(content.endsWith('\n'), `${path} 缺少末尾换行`)
   }
 })
+
+
+test('本地 Compose 服务白名单和废资产黑名单', () => {
+  const composePath = 'infra/compose.yaml'
+  const raw = readFileSync(join(root, composePath), 'utf8')
+  const allowed = ['alertmanager', 'attu', 'etcd', 'milvus', 'minio']
+  const declared = [...raw.split(/^volumes:/m)[0].matchAll(/^  ([\w-]+):$/gm)]
+  assert.deepEqual(declared.map((match) => match[1]).sort(), allowed)
+  assert.doesNotMatch(raw, /\$\{|env_file|dockerfile|build:|cls[-_]mcp[-_]server|cls[-_]?log|log[-_]upload|sop[-_ ]?seed/i)
+  for (const template of ['project.template.json', 'user.project.template.json']) {
+    assert.ok(!Object.hasOwn(json('config/' + template), 'docker'))
+  }
+  const tracked = spawnSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
+    { cwd: root, encoding: 'utf8' })
+  assert.equal(tracked.status, 0)
+  for (const path of tracked.stdout.split('\0')) {
+    assert.doesNotMatch(path, /(?:^|\/)(?:app\.Dockerfile|project\.compose\.json)$/i)
+  }
+})
+
+test('Docker Compose 解析、健康检查和依赖关系', (t) => {
+  const probe = spawnSync('docker', ['compose', 'version'], { cwd: root, encoding: 'utf8' })
+  if (probe.error?.code === 'ENOENT' || probe.status !== 0) {
+    t.skip('Docker Compose CLI 不可用')
+    return
+  }
+  const parsed = spawnSync('docker', ['compose', '-f', 'infra/compose.yaml', 'config', '--format', 'json'],
+    { cwd: root, encoding: 'utf8' })
+  assert.equal(parsed.status, 0, parsed.stderr)
+  const { services, volumes } = JSON.parse(parsed.stdout)
+  assert.deepEqual(Object.keys(services).sort(), ['alertmanager', 'attu', 'etcd', 'milvus', 'minio'])
+  assert.deepEqual(Object.keys(volumes).sort(), [
+    'alertmanager-data', 'etcd-data', 'milvus-data', 'minio-data',
+  ])
+  for (const service of Object.values(services)) {
+    assert.ok(service.healthcheck.test.length > 0)
+    assert.equal(service.build, undefined)
+    assert.equal(service.env_file, undefined)
+    assert.ok((service.ports ?? []).every((port) => port.host_ip === '127.0.0.1'))
+  }
+  const healthyDependencies = (service) => Object.entries(service.depends_on).map(([key, value]) => {
+    assert.equal(value.condition, 'service_healthy')
+    return key
+  }).sort()
+  assert.deepEqual(healthyDependencies(services.milvus), ['etcd', 'minio'])
+  assert.deepEqual(healthyDependencies(services.attu), ['milvus'])
+  assert.ok(services.alertmanager.ports.some((port) => port.target === 9093))
+  assert.ok(services.alertmanager.volumes.some((volume) =>
+    volume.target === '/etc/alertmanager/alertmanager.yml' && volume.read_only === true))
+})

@@ -1,25 +1,28 @@
+import json
 from collections.abc import Iterable
 
-from .tenant import require_owner_user_id
+from super_ai.tenant import require_owner_user_id
+
+
+def _literal(value: str) -> str:
+    return json.dumps(value, ensure_ascii=False)
 
 
 def milvus_search_filter(*, tenant_id: str, allowed_knowledge_base_ids: Iterable[str]) -> str:
-    require_owner_user_id(tenant_id)
-    ids = [x for x in allowed_knowledge_base_ids if x]
-    return (
-        ""
-        if not ids
-        else f"tenantId == {tenant_id!r} and knowledgeBaseId in [{', '.join(repr(x) for x in ids)}]"
-    )
+    require_owner_user_id(tenant_id.strip())
+    ids = [_literal(value) for value in allowed_knowledge_base_ids if value.strip()]
+    if not ids:
+        return ""
+    return f"tenantId == {_literal(tenant_id)} and knowledgeBaseId in [{', '.join(ids)}]"
 
 
 def milvus_delete_filter(*, tenant_id: str, knowledge_base_id: str, document_id: str) -> str:
-    require_owner_user_id(tenant_id)
-    if not knowledge_base_id or not document_id:
+    require_owner_user_id(tenant_id.strip())
+    if not knowledge_base_id.strip() or not document_id.strip():
         raise ValueError("删除 scope 不能为空")
     return (
-        f"tenantId == {tenant_id!r} and knowledgeBaseId == {knowledge_base_id!r} "
-        f"and documentId == {document_id!r}"
+        f"tenantId == {_literal(tenant_id)} and knowledgeBaseId == {_literal(knowledge_base_id)} "
+        f"and documentId == {_literal(document_id)}"
     )
 
 

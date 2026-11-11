@@ -15,7 +15,7 @@
     "retries": 2
   },
   "modelCapabilities": { "qwen3.7-max": { "contextWindowTokens": 1000000 } },
-  "vectorStore": { "endpoint": "", "token": "" },
+  "vectorStore": { "endpoint": "http://127.0.0.1:19530", "token": "", "collectionName": "knowledge_chunks" },
   "cls": { "secretId": "", "secretKey": "" },
   "mcp": { "url": "", "secret": "" },
   "minio": { "endpoint": "", "accessKey": "", "secretKey": "" },
