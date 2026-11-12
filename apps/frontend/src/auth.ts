@@ -1,22 +1,79 @@
+import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { AuthLoginData, AuthRequest, AuthMeData } from '@super-ai/api-contracts'
 import { config } from './config'
+import { useProtectedCleanup, useProtectedData } from './protectedData'
+import { apiClient, sseClient } from './transport'
+import type { RequestOptions } from './transport'
 
-const KEY = 'super-ai.auth.token'
-export const authClient = {
-  async request<T>(path: string, init: RequestInit = {}) {
-    const token = localStorage.getItem(KEY)
-    const headers = new Headers(init.headers)
-    headers.set('Content-Type', 'application/json')
-    if (token) headers.set('Authorization', `Bearer ${token}`)
-    const response = await fetch(`${config.apiBaseUrl}${path}`, { ...init, headers })
-    const envelope = await response.json() as { ok: boolean; data?: T; error?: { message: string } }
-    if (!response.ok || !envelope.ok) throw new Error(envelope.error?.message ?? '请求失败')
-    return envelope.data as T
-  },
-  async login(body: AuthRequest) { const data = await this.request<AuthLoginData>('/auth/login', { method: 'POST', body: JSON.stringify(body) }); localStorage.setItem(KEY, data.token); return data.user },
-  async me() { return this.request<AuthMeData>('/auth/me') },
-  async logout() { try { await this.request('/auth/logout', { method: 'POST' }) } finally { localStorage.removeItem(KEY) } },
-  clear() { localStorage.removeItem(KEY) },
-}
-export const useAuthStore = defineStore('auth', { state: () => ({ user: null as AuthMeData | null, initialized: false }), actions: { async initialize() { try { this.user = await authClient.me() } catch { authClient.clear(); this.user = null } finally { this.initialized = true } }, async logout() { await authClient.logout(); this.user = null } } })
+const key = 'super-ai.auth.token'
+const base = config.apiBaseUrl.replace(/\/$/, '')
+const post = (body?: AuthRequest): RequestInit => body
+  ? { method: 'POST', body: JSON.stringify(body) }
+  : { method: 'POST' }
+
+export const useAuthStore = defineStore('auth', () => {
+  const user = ref<AuthMeData | null>(null)
+  const initialized = ref(false)
+  const authenticated = computed(() => user.value !== null)
+  const cleanup = useProtectedCleanup()
+  const data = useProtectedData()
+  cleanup.register(() => data.$reset())
+
+  function clear() {
+    localStorage.removeItem(key)
+    user.value = null
+    cleanup.clear()
+  }
+
+  function sessionOptions(options: RequestOptions): RequestOptions {
+    const bearer = localStorage.getItem(key)
+    return bearer ? {
+      ...options,
+      bearer,
+      onUnauthorized: () => {
+        if (localStorage.getItem(key) === bearer) clear()
+      },
+    } : options
+  }
+
+  function request<T>(path: string, options: RequestOptions = {}) {
+    return apiClient<T>(base + path, sessionOptions(options))
+  }
+
+  function stream(path: string, options: RequestOptions = {}) {
+    return sseClient(base + path, sessionOptions(options))
+  }
+
+  async function initialize() {
+    const token = localStorage.getItem(key)
+    try {
+      if (token) {
+        const restored = await request<AuthMeData>('/auth/me')
+        if (localStorage.getItem(key) === token) user.value = restored
+      }
+    } catch {
+      if (localStorage.getItem(key) === token) clear()
+    } finally {
+      initialized.value = true
+    }
+  }
+
+  async function login(body: AuthRequest) {
+    const result = await apiClient<AuthLoginData>(base + '/auth/login', post(body))
+    localStorage.setItem(key, result.token)
+    user.value = result.user
+  }
+
+  function register(body: AuthRequest) {
+    return apiClient<AuthMeData>(base + '/auth/register', post(body))
+  }
+
+  async function logout() {
+    const token = localStorage.getItem(key)
+    await request<{ loggedOut: boolean }>('/auth/logout', post())
+    if (localStorage.getItem(key) === token) clear()
+  }
+
+  return { user, initialized, authenticated, initialize, login, register, logout, request, stream }
+})

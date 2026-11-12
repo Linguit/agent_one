@@ -1,14 +1,20 @@
-import { createApp } from 'vue'
+import { createApp, watch } from 'vue'
 import { createPinia } from 'pinia'
-import { createRouter, createWebHistory } from 'vue-router'
+import { createWebHistory } from 'vue-router'
 import App from './App.vue'
-import FoundationView from './FoundationView.vue'
 import { config } from './config'
+import { useAuthStore } from './auth'
+import { createAppRouter } from './router'
 import './style.css'
 
 document.title = config.title
-const router = createRouter({
-  history: createWebHistory(),
-  routes: [{ path: '/', component: FoundationView }],
+const pinia = createPinia()
+const router = createAppRouter(pinia, createWebHistory())
+const auth = useAuthStore(pinia)
+watch(() => auth.authenticated, active => {
+  const current = router.currentRoute.value
+  if (!active && current.meta.requiresAuth) {
+    void router.replace({ name: 'login', query: { redirect: current.fullPath } })
+  }
 })
-createApp(App).use(createPinia()).use(router).mount('#app')
+createApp(App).use(pinia).use(router).mount('#app')
