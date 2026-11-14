@@ -1,4 +1,5 @@
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from copy import deepcopy
 from pathlib import Path
 from typing import cast
@@ -14,8 +15,11 @@ from starlette.responses import Response
 
 from super_ai.auth import AuthService, current_user, get_auth_service
 from super_ai.contracts import failure, success
+from super_ai.job_api import router as job_router
+from super_ai.job_runtime import JobHandlers, JobWorker
 from super_ai.memory.config import DatabaseSettings
 from super_ai.memory.engine import create_engine, session_factory
+from super_ai.memory.sqlite.jobs import JobRepository
 from super_ai.project_config import JsonObject, load_project_config
 
 
@@ -39,16 +43,36 @@ def get_project_config(request: Request) -> JsonObject:
     return cast(JsonObject, request.app.state.project_config)
 
 
-def create_app(*, config: JsonObject | None = None, config_dir: Path | None = None) -> FastAPI:
+def create_app(
+    *,
+    config: JsonObject | None = None,
+    config_dir: Path | None = None,
+    job_handlers: JobHandlers | None = None,
+) -> FastAPI:
     if config is not None and config_dir is not None:
         raise ValueError("config 与 config_dir 不能同时指定")
     project_config = deepcopy(config) if config is not None else load_project_config(config_dir)
-    app = FastAPI(title="Super AI 基础服务")
-    app.state.project_config = project_config
     database_config = cast(dict[str, object], project_config.get("database", {}))
     db_url = cast(str, database_config.get("url", "sqlite+aiosqlite:///./super_ai.db"))
-    app.state.db_engine = create_engine(DatabaseSettings(url=db_url))
-    app.state.db_session_factory = session_factory(app.state.db_engine)
+    handlers = job_handlers if job_handlers is not None else JobHandlers()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+        engine = create_engine(DatabaseSettings(url=db_url))
+        try:
+            factory = session_factory(engine)
+            repository = JobRepository(factory)
+            app.state.db_engine = engine
+            app.state.db_session_factory = factory
+            app.state.job_repository = repository
+            async with JobWorker(repository, handlers):
+                yield
+        finally:
+            await engine.dispose()
+
+    app = FastAPI(title="Super AI 基础服务", lifespan=lifespan)
+    app.state.project_config = project_config
+    app.include_router(job_router)
     app.add_middleware(RequestIdMiddleware)
     app.add_middleware(
         CORSMiddleware,

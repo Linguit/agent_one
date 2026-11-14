@@ -29,6 +29,35 @@ export const ERROR_CATALOG = {
   VALIDATION_INVALID_REQUEST: { category: 'VALIDATION', httpStatus: 422, message: '请求参数无效。' },
   SYSTEM_INTERNAL_ERROR: { category: 'SYSTEM', httpStatus: 500, message: '服务暂时不可用。' },
 } as const
-export const OPENAPI_PATHS = ['/health'] as const
+export const BACKGROUND_JOB_PATHS = [
+  '/background-jobs',
+  '/background-jobs/{id}',
+  '/background-jobs/{id}:cancel',
+  '/background-jobs/{id}:retry',
+] as const
+export const OPENAPI_PATHS = ['/health', ...BACKGROUND_JOB_PATHS] as const
+
+export type BackgroundJobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+export type BackgroundJob = {
+  id: string
+  kind: string
+  resourceType: string
+  resourceId: string
+  status: BackgroundJobStatus
+  attempt: number
+  maxAttempts: number
+  timeoutSeconds: number
+  availableAt: string
+  leaseExpiresAt: string | null
+  cancelRequestedAt: string | null
+  retryOfJobId: string | null
+  errorMessage: string | null
+  createdAt: string
+  updatedAt: string
+  startedAt: string | null
+  completedAt: string | null
+}
+export type BackgroundJobResponse = ApiEnvelope<BackgroundJob>
+export type BackgroundJobListResponse = ApiEnvelope<BackgroundJob[]>
 
 export interface HealthResponse { status: 'ok' }

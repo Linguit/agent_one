@@ -1,7 +1,10 @@
+from pathlib import Path
+
 import httpx
 
-from super_ai.auth import auth_sessions, normalize_email, token_digest, users
+from super_ai.auth import normalize_email, token_digest
 from super_ai.main import create_app
+from super_ai.memory.migrations import upgrade_head
 
 
 def test_auth_security_primitives() -> None:
@@ -10,14 +13,11 @@ def test_auth_security_primitives() -> None:
     assert token_digest("opaque-token") != "opaque-token"
 
 
-async def test_auth_session_http_lifecycle() -> None:
-    app = create_app(config={"database": {"url": "sqlite+aiosqlite:///:memory:"}})
-    engine = app.state.db_engine
-    try:
-        async with engine.begin() as connection:
-            await connection.run_sync(users.create)
-            await connection.run_sync(auth_sessions.create)
-
+async def test_auth_session_http_lifecycle(tmp_path: Path) -> None:
+    url = f"sqlite+aiosqlite:///{(tmp_path / 'auth.db').as_posix()}"
+    upgrade_head(url, Path(__file__).resolve().parents[1])
+    app = create_app(config={"database": {"url": url}})
+    async with app.router.lifespan_context(app):
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://test"
         ) as client:
@@ -36,5 +36,3 @@ async def test_auth_session_http_lifecycle() -> None:
             assert logout.status_code == 200
             assert logout.json()["data"] == {"loggedOut": True}
             assert (await client.get("/auth/me", headers=headers)).status_code == 401
-    finally:
-        await engine.dispose()

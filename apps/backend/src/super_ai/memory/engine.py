@@ -12,7 +12,7 @@ from super_ai.memory.config import DatabaseSettings
 
 
 def create_engine(settings: DatabaseSettings) -> AsyncEngine:
-    return create_async_engine(settings.url, future=True)
+    return create_async_engine(settings.url, future=True, hide_parameters=True)
 
 
 def session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
