@@ -248,3 +248,21 @@ class MilvusVectorStore:
             tenant_id=scope.tenant_id, knowledge_base_id=knowledge_base_id, document_id=document_id
         )
         return self._ready_client().delete(self._config.collectionName, filter=expression)
+
+    def delete_existing_document(
+        self, scope: OwnerScope, knowledge_base_id: str, document_id: str
+    ) -> object:
+        """使用短生命周期连接清理已有集合中的文档。"""
+        expression = milvus_delete_filter(
+            tenant_id=scope.tenant_id, knowledge_base_id=knowledge_base_id, document_id=document_id
+        )
+        client = self._client_factory(self._config)
+        try:
+            collection = self._config.collectionName
+            if not client.has_collection(collection):
+                return None
+            return client.delete(collection, filter=expression)
+        finally:
+            close = getattr(client, "close", None)
+            if callable(close):
+                close()

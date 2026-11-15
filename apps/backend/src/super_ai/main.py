@@ -15,12 +15,16 @@ from starlette.responses import Response
 
 from super_ai.auth import AuthService, current_user, get_auth_service
 from super_ai.contracts import failure, success
+from super_ai.document_api import router as document_router
 from super_ai.job_api import router as job_router
 from super_ai.job_runtime import JobHandlers, JobWorker
 from super_ai.memory.config import DatabaseSettings
 from super_ai.memory.engine import create_engine, session_factory
+from super_ai.memory.sqlite.documents import DeleteVectors, DocumentRepository
 from super_ai.memory.sqlite.jobs import JobRepository
 from super_ai.project_config import JsonObject, load_project_config
+from super_ai.tenant import OwnerScope
+from super_ai.vector_store import MilvusVectorStore, VectorStoreConfig
 
 
 #   定义一个会包住所有请求的中间件
@@ -48,6 +52,7 @@ def create_app(
     config: JsonObject | None = None,
     config_dir: Path | None = None,
     job_handlers: JobHandlers | None = None,
+    delete_document_vectors: DeleteVectors | None = None,
 ) -> FastAPI:
     if config is not None and config_dir is not None:
         raise ValueError("config 与 config_dir 不能同时指定")
@@ -55,6 +60,10 @@ def create_app(
     database_config = cast(dict[str, object], project_config.get("database", {}))
     db_url = cast(str, database_config.get("url", "sqlite+aiosqlite:///./super_ai.db"))
     handlers = job_handlers if job_handlers is not None else JobHandlers()
+
+    def delete_vectors(scope: OwnerScope, kb: str, document: str) -> object:
+        store = MilvusVectorStore(VectorStoreConfig.from_project(project_config))
+        return store.delete_existing_document(scope, kb, document)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
@@ -65,6 +74,9 @@ def create_app(
             app.state.db_engine = engine
             app.state.db_session_factory = factory
             app.state.job_repository = repository
+            app.state.document_repository = DocumentRepository(
+                factory, delete_document_vectors or delete_vectors
+            )
             async with JobWorker(repository, handlers):
                 yield
         finally:
@@ -73,6 +85,7 @@ def create_app(
     app = FastAPI(title="Super AI 基础服务", lifespan=lifespan)
     app.state.project_config = project_config
     app.include_router(job_router)
+    app.include_router(document_router)
     app.add_middleware(RequestIdMiddleware)
     app.add_middleware(
         CORSMiddleware,

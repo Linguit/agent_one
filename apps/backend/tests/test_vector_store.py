@@ -28,6 +28,10 @@ class FakeMilvus:
         self.rows: list[Row] = []
         self.searches: list[str] = []
         self.deletes: list[str] = []
+        self.closes = 0
+
+    def close(self) -> None:
+        self.closes += 1
 
     def has_collection(self, collection_name: str) -> bool:
         assert collection_name == "knowledge_chunks"
@@ -130,6 +134,20 @@ class Harness:
         assert config.endpoint.port == 19530
         self.connects += 1
         return self.client
+
+
+def test_delete_existing_document_uses_scoped_filter_and_closes_client() -> None:
+    harness = Harness()
+    scope = OwnerScope("owner", "owner")
+    harness.store.delete_existing_document(scope, "kb", "document")
+    assert harness.client.deletes == []
+    assert harness.client.closes == 1
+    harness.store.initialize()
+    harness.store.delete_existing_document(scope, "kb", "document")
+    assert harness.client.deletes == [
+        'tenantId == "owner" and knowledgeBaseId == "kb" and documentId == "document"'
+    ]
+    assert harness.client.closes == 2
 
 
 def test_import_does_not_load_sdk_or_read_project_config() -> None:

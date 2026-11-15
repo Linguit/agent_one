@@ -36,6 +36,7 @@ ERROR_CATALOG: dict[str, tuple[Literal["AUTH", "BUSINESS", "VALIDATION", "SYSTEM
     "AUTH_UNAUTHORIZED": ("AUTH", 401, "需要认证。"),
     "AUTH_FORBIDDEN": ("AUTH", 403, "无权访问该资源。"),
     "BUSINESS_NOT_FOUND": ("BUSINESS", 404, "请求的资源不存在。"),
+    "BUSINESS_CONFLICT": ("BUSINESS", 409, "资源冲突。"),
     "VALIDATION_INVALID_REQUEST": ("VALIDATION", 422, "请求参数无效。"),
     "SYSTEM_INTERNAL_ERROR": ("SYSTEM", 500, "服务暂时不可用。"),
 }
