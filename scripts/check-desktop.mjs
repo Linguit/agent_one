@@ -23,6 +23,9 @@ try {
   const user = { id: 'desktop', email: 'desktop@example.test' }
   let registered = false
   let session = false
+  let uploaded = false
+  let indexTask = false
+  const document = { id: 'desktop-document', filename: 'desktop.md', indexStatus: 'pending' }
   await page.route('**/api/**', async route => {
     const request = route.request()
     const path = new URL(request.url()).pathname
@@ -47,6 +50,25 @@ try {
       return route.fulfill({ json: { ok: true, data: { loggedOut: true } } })
     }
     if (path === '/api/health') return route.fulfill({ json: { ok: true, data: { status: 'ok' } } })
+    if (path === '/api/knowledge-bases' && validSession) {
+      return route.fulfill({ json: { ok: true, data: [{ id: 'desktop-kb', name: '默认知识库' }] } })
+    }
+    if (path === '/api/knowledge-bases/desktop-kb/documents' && validSession) {
+      if (request.method() === 'POST') {
+        assert.match(request.headers()['content-type'], /^multipart\/form-data; boundary=/)
+        assert.match(request.postData(), /filename="desktop\.md"/)
+        uploaded = true
+        return route.fulfill({ json: { ok: true, data: document } })
+      }
+      return route.fulfill({ json: { ok: true, data: uploaded ? [document] : [] } })
+    }
+    if (path === '/api/knowledge-bases/desktop-kb/documents/desktop-document/index-tasks' && validSession) {
+      assert.ok(uploaded)
+      if (request.method() === 'POST') indexTask = true
+      return route.fulfill({ json: { ok: true, data: indexTask ? {
+        id: 'desktop-task', documentId: document.id, status: 'pending', failureReason: null,
+      } : null } })
+    }
     await route.fulfill({ status: 401, json: { ok: false, error: { message: '需要认证' } } })
   })
   const response = await page.goto(`http://127.0.0.1:${address.port}/knowledge`)
@@ -71,8 +93,15 @@ try {
     await nav.getByRole('link', { name: title, exact: true }).click()
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(title)
     await expect(page.getByRole('region', { name: '会话' })).toHaveCount(title === '对话' ? 1 : 0)
-    await expect(page.getByText('功能待接入')).toBeVisible()
+    if (title !== '知识库') await expect(page.getByText('功能待接入')).toBeVisible()
   }
+  await page.getByLabel('文档', { exact: true }).setInputFiles({
+    name: 'desktop.md', mimeType: 'text/markdown', buffer: Buffer.from('desktop smoke'),
+  })
+  await page.getByRole('button', { name: '上传并索引' }).click()
+  await expect(page.getByText('desktop.md', { exact: true })).toBeVisible()
+  await expect(page.getByText('等待索引', { exact: true })).toBeVisible()
+  assert.ok(indexTask)
   const canvas = await page.getByRole('main').boundingBox()
   assert.ok(canvas && canvas.x > 0 && canvas.y > 0)
   assert.equal(canvas.x + canvas.width, 1440)
@@ -89,7 +118,7 @@ try {
     assert.equal(denied.status(), 403)
   }
   assert.deepEqual(errors, [])
-  console.log('桌面 1440×900：注册、登录、刷新、工作台四入口、退出、布局及配置访问检查通过（浏览器接口夹具）')
+  console.log('桌面 1440×900：认证、工作台、上传并调度索引、布局及配置访问通过（浏览器接口夹具）')
 } finally {
   await browser?.close()
   await server.close()

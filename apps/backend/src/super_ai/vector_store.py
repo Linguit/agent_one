@@ -174,6 +174,15 @@ class MilvusVectorStore:
         """连接服务，集合仍由 initialize 显式准备。"""
         self._connected_client()
 
+    def close(self) -> None:
+        with self._lock:
+            client = self._client
+            self._client = None
+            self._initialized = False
+            close = getattr(client, "close", None)
+            if callable(close):
+                close()
+
     def _connected_client(self) -> VectorClient:
         with self._lock:
             if self._client is None:
@@ -222,9 +231,11 @@ class MilvusVectorStore:
         vector: Sequence[float],
         *,
         limit: int = 10,
+        allowed_document_ids: Sequence[str] | None = None,
     ) -> list[Mapping[str, object]]:
         expression = milvus_search_filter(
-            tenant_id=scope.tenant_id, allowed_knowledge_base_ids=allowed_knowledge_base_ids
+            tenant_id=scope.tenant_id, allowed_knowledge_base_ids=allowed_knowledge_base_ids,
+            allowed_document_ids=allowed_document_ids,
         )
         if not expression:
             return []

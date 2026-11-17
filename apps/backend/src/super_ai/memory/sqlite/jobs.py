@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 from datetime import datetime, timedelta
 from typing import Literal
 from uuid import uuid4
@@ -70,12 +71,15 @@ class JobRepository:
         payload: JsonObject,
         max_attempts: int = 3,
         timeout_seconds: int = 300,
+        transaction: AsyncSession | None = None,
     ) -> RowMapping:
         require_owner_user_id(owner_user_id)
         if not kind or max_attempts < 1 or timeout_seconds < 1:
             raise ValueError("任务类型、最大尝试次数或超时时间无效")
         now, job_id = _utc_now(), str(uuid4())
-        async with session_scope(self.factory) as session:
+        async with (
+            session_scope(self.factory) if transaction is None else nullcontext(transaction)
+        ) as session:
             row = await session.execute(
                 jobs.insert()
                 .values(
@@ -196,6 +200,7 @@ class JobRepository:
                         _scope(owner_user_id),
                         jobs.c.id == job_id,
                         jobs.c.status.in_(("failed", "cancelled")),
+                        jobs.c.resource_type != "document_index_task",
                     ),
                 )
                 .returning(*jobs.c)
@@ -266,7 +271,9 @@ class JobRepository:
             await _event(session, job["id"], kind, now, data)
             return True
 
-    async def finish(self, job: RowMapping, outcome: JobOutcome) -> None:
+    async def finish(
+        self, job: RowMapping, outcome: JobOutcome, *, transaction: AsyncSession | None = None
+    ) -> None:
         now = _utc_now()
         expired = outcome == "lease_expired"
         expiry = jobs.c.lease_expires_at <= now if expired else jobs.c.lease_expires_at > now
@@ -274,7 +281,8 @@ class JobRepository:
         delay = min(30, 2 ** min(5, job["attempt"] - 1))
         cancelled = jobs.c.cancel_requested_at.is_not(None)
         status = "succeeded" if outcome == "succeeded" else ("queued" if retry else "failed")
-        async with session_scope(self.factory) as session:
+        manager = session_scope(self.factory) if transaction is None else nullcontext(transaction)
+        async with manager as session:
             result = await session.execute(
                 update(jobs)
                 .where(*_running(job), expiry)

@@ -109,7 +109,7 @@ def _chunk_spans(text: str, config: ChunkingConfig) -> Iterator[tuple[int, int]]
             start = separator.end()
         yield start, len(text)
 
-geiw
+
 def chunk_document_text(text: str, config: ChunkingConfig) -> Iterator[DocumentChunk]:
     """按持久化配置切分正文，字符区间为零基、左闭右开。"""
     index = 0

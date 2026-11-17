@@ -81,3 +81,19 @@
 
 - **WHEN** 客户端读取文档上传契约
 - **THEN** 可以确定文件字段、策略参数和显式覆盖语义。
+
+### Requirement: 文档索引任务契约
+
+共享契约和 OpenAPI SHALL 定义索引任务创建、状态、重试重建和取消，并复用统一响应和属主鉴权。
+
+#### Scenario: 客户端展示任务状态
+
+- **WHEN** 客户端读取索引任务 DTO
+- **THEN** 状态与文档 DTO 的索引状态使用相同枚举。
+
+### Requirement: 知识检索工具共享契约
+共享契约 SHALL 定义知识检索工具输入、输出和引用类型。
+
+#### Scenario: 消费工具结果
+- **WHEN** 调用方处理检索响应
+- **THEN** 可以读取 chunkId、documentId、knowledgeBaseId、source、excerpt、metadata、分支排名和分数、rrfScore、rerankRank、rerankScore 与 score。

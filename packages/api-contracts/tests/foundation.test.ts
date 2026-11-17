@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
   BACKGROUND_JOB_PATHS,
+  DOCUMENT_INDEX_PATHS,
   DOCUMENT_CHUNKING_DEFAULTS,
   DOCUMENT_PREVIEW_LIMITS,
   DOCUMENT_UPLOAD_POLICY,
@@ -40,7 +41,9 @@ describe('基础契约', () => {
 
 describe('后台任务契约', () => {
   it('公开四个管理路径及任务状态', () => {
-    expect(OPENAPI_PATHS).toEqual(['/health', ...BACKGROUND_JOB_PATHS, ...KNOWLEDGE_PATHS])
+    expect(OPENAPI_PATHS).toEqual([
+      '/health', ...BACKGROUND_JOB_PATHS, ...KNOWLEDGE_PATHS, ...DOCUMENT_INDEX_PATHS,
+    ])
     expect(BACKGROUND_JOB_PATHS).toEqual([
       '/background-jobs',
       '/background-jobs/{id}',

@@ -8,12 +8,21 @@ def _literal(value: str) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
-def milvus_search_filter(*, tenant_id: str, allowed_knowledge_base_ids: Iterable[str]) -> str:
+def milvus_search_filter(
+    *, tenant_id: str, allowed_knowledge_base_ids: Iterable[str],
+    allowed_document_ids: Iterable[str] | None = None,
+) -> str:
     require_owner_user_id(tenant_id.strip())
     ids = [_literal(value) for value in allowed_knowledge_base_ids if value.strip()]
     if not ids:
         return ""
-    return f"tenantId == {_literal(tenant_id)} and knowledgeBaseId in [{', '.join(ids)}]"
+    expression = f"tenantId == {_literal(tenant_id)} and knowledgeBaseId in [{', '.join(ids)}]"
+    if allowed_document_ids is not None:
+        document_ids = [_literal(value) for value in allowed_document_ids if value.strip()]
+        if not document_ids:
+            return ""
+        expression += f" and documentId in [{', '.join(document_ids)}]"
+    return expression
 
 
 def milvus_delete_filter(*, tenant_id: str, knowledge_base_id: str, document_id: str) -> str:

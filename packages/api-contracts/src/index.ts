@@ -43,7 +43,30 @@ export const KNOWLEDGE_PATHS = [
   '/knowledge-bases/{kb}/documents/{document}',
   '/knowledge-bases/{kb}/documents/{document}/chunk-preview',
 ] as const
-export const OPENAPI_PATHS = ['/health', ...BACKGROUND_JOB_PATHS, ...KNOWLEDGE_PATHS] as const
+export const DOCUMENT_INDEX_PATHS = [
+  '/knowledge-bases/{kb}/documents/{document}/index-tasks',
+  '/knowledge-bases/{kb}/documents/{document}/index-tasks/{task}',
+  '/knowledge-bases/{kb}/documents/{document}/index-tasks/{task}:retry',
+  '/knowledge-bases/{kb}/documents/{document}/index-tasks/{task}:cancel',
+] as const
+export const OPENAPI_PATHS = [
+  '/health', ...BACKGROUND_JOB_PATHS, ...KNOWLEDGE_PATHS, ...DOCUMENT_INDEX_PATHS,
+] as const
+export type DocumentIndexStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+export type DocumentIndexTask = {
+  id: string
+  knowledgeBaseId: string
+  documentId: string
+  status: DocumentIndexStatus
+  failureReason: string | null
+  retryOfTaskId: string | null
+  createdAt: string
+  updatedAt: string
+  startedAt: string | null
+  completedAt: string | null
+}
+export type DocumentIndexTaskResponse = ApiEnvelope<DocumentIndexTask>
+export type LatestDocumentIndexTaskResponse = ApiEnvelope<DocumentIndexTask | null>
 
 export const DOCUMENT_UPLOAD_POLICY = {
   maxBytes: 10 * 1024 * 1024,
@@ -67,7 +90,7 @@ export type KnowledgeDocument = {
   mimeType: 'text/markdown' | 'text/plain' | 'application/pdf'
   sha256: string
   uploadedAt: string
-  indexStatus: 'pending'
+  indexStatus: DocumentIndexStatus
   chunking: ChunkingConfig
 }
 export type DocumentChunkPreview = {
@@ -105,3 +128,29 @@ export type BackgroundJobResponse = ApiEnvelope<BackgroundJob>
 export type BackgroundJobListResponse = ApiEnvelope<BackgroundJob[]>
 
 export interface HealthResponse { status: 'ok' }
+
+export type KnowledgeRetrievalToolInput = {
+  query: string
+  topK?: number
+  knowledgeBaseId?: string | null
+  documentId?: string | null
+}
+
+export type KnowledgeRetrievalCitation = {
+  chunkId: string
+  documentId: string
+  knowledgeBaseId: string
+  source: string
+  excerpt: string
+  metadata: Record<string, unknown>
+  vectorRank: number | null
+  vectorScore: number | null
+  bm25Rank: number | null
+  bm25Score: number | null
+  rrfScore: number
+  rerankRank: number
+  rerankScore: number
+  score: number
+}
+
+export type KnowledgeRetrievalToolOutput = { results: KnowledgeRetrievalCitation[] }

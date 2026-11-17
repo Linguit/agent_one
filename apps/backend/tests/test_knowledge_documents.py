@@ -99,7 +99,7 @@ def test_chunk_spans_and_configuration() -> None:
         resolve_chunking("markdown-heading", 1200, None)
 
 
-async def _register(client: httpx.AsyncClient, name: str) -> tuple[str, dict[str, str]]:
+async def register_user(client: httpx.AsyncClient, name: str) -> tuple[str, dict[str, str]]:
     credentials = {"email": f"{name}@example.test", "password": "Local-password-2026"}
     registration = await client.post("/auth/register", json=credentials)
     assert registration.status_code == 200
@@ -129,8 +129,8 @@ async def test_document_lifecycle(tmp_path: Path) -> None:
             base_url="http://test",
         ) as client,
     ):
-        owner_id, owner = await _register(client, "owner")
-        _, other = await _register(client, "other")
+        owner_id, owner = await register_user(client, "owner")
+        _, other = await register_user(client, "other")
         assert (await client.get("/knowledge-bases")).status_code == 401
         bases = (await client.get("/knowledge-bases", headers=owner)).json()["data"]
         assert len(bases) == 1

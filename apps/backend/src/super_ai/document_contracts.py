@@ -13,6 +13,7 @@ DEFAULT_MAX_CHARACTERS = 1200
 DEFAULT_OVERLAP = 200
 
 Strategy = Literal["fixed-character", "markdown-heading", "paragraph"]
+IndexStatus = Literal["pending", "running", "succeeded", "failed", "cancelled"]
 
 
 class FixedCharacterConfig(BaseModel):
@@ -43,7 +44,7 @@ class KnowledgeDocument(BaseModel):
     mimeType: Literal["text/markdown", "text/plain", "application/pdf"]
     sha256: str
     uploadedAt: datetime
-    indexStatus: Literal["pending"]
+    indexStatus: IndexStatus
     chunking: ChunkingConfig
 
 
@@ -62,6 +63,19 @@ class ChunkPreview(BaseModel):
 
 class DocumentDeleted(BaseModel):
     deleted: Literal[True] = True
+
+
+class DocumentIndexTask(BaseModel):
+    id: str
+    knowledgeBaseId: str
+    documentId: str
+    status: IndexStatus
+    failureReason: str | None
+    retryOfTaskId: str | None
+    createdAt: datetime
+    updatedAt: datetime
+    startedAt: datetime | None
+    completedAt: datetime | None
 
 
 T = TypeVar("T")
