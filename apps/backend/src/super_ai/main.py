@@ -14,6 +14,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from super_ai.auth import AuthService, current_user, get_auth_service
+from super_ai.chat_api import router as chat_router
 from super_ai.contracts import failure, success
 from super_ai.document_api import router as document_router
 from super_ai.document_indexing import DocumentIndexer
@@ -24,6 +25,7 @@ from super_ai.knowledge_retrieval import KnowledgeRetrieval
 from super_ai.llm_provider import create_llm_provider
 from super_ai.memory.config import DatabaseSettings
 from super_ai.memory.engine import create_engine, session_factory
+from super_ai.memory.sqlite.chat import ChatRepository
 from super_ai.memory.sqlite.documents import DeleteVectors, DocumentRepository
 from super_ai.memory.sqlite.index_tasks import INDEX_TASK_KIND
 from super_ai.memory.sqlite.jobs import JobRepository
@@ -78,6 +80,7 @@ def create_app(
             app.state.db_engine = engine
             app.state.db_session_factory = factory
             app.state.job_repository = repository
+            app.state.chat_repository = ChatRepository(factory)
             app.state.document_repository = DocumentRepository(
                 factory, delete_document_vectors or delete_vectors
             )
@@ -105,6 +108,7 @@ def create_app(
     app = FastAPI(title="Super AI 基础服务", lifespan=lifespan)
     app.state.project_config = project_config
     app.include_router(job_router)
+    app.include_router(chat_router)
     app.include_router(document_router)
     app.include_router(index_router)
     app.add_middleware(RequestIdMiddleware)
@@ -123,7 +127,9 @@ def create_app(
     @app.exception_handler(Exception)
     async def exception_handler(request: Request, exc: Exception) -> JSONResponse:
         del exc
-        return failure("SYSTEM_INTERNAL_ERROR", request)
+        response = failure("SYSTEM_INTERNAL_ERROR", request)
+        response.headers["X-Request-ID"] = request.state.request_id
+        return response
 
     @app.exception_handler(HTTPException)
     async def http_handler(request: Request, exc: HTTPException) -> JSONResponse:
