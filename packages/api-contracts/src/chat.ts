@@ -8,10 +8,30 @@ export interface ChatMetadata extends Record<string, ChatJson> {
 }
 
 export type ChatCreate = Record<string, never>
-export interface ChatAppend {
-  role: ChatRole
+export interface ChatStreamInput {
   content: string
   metadata?: Partial<ChatMetadata>
+}
+
+export interface ChatAppend extends ChatStreamInput {
+  role: ChatRole
+}
+
+type ToolAuditParent =
+  | { chatSessionId: string; diagnosticTaskId: null }
+  | { chatSessionId: null; diagnosticTaskId: string }
+
+export type ToolCallAudit = ToolAuditParent & {
+  id: string
+  ownerUserId: string
+  toolName: string
+  arguments: Record<string, ChatJson>
+  status: 'started' | 'completed' | 'failed'
+  resultSummary: string | null
+  errorMessage: string | null
+  startedAt: string
+  completedAt: string | null
+  durationMs: number | null
 }
 
 export interface ChatSession {

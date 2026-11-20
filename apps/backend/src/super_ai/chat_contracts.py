@@ -1,7 +1,8 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
+from pydantic.alias_generators import to_camel
 
 from super_ai.contracts import Meta
 
@@ -20,10 +21,9 @@ class ChatMetadata(BaseModel):
     toolCallIds: list[str] = Field(default_factory=list)
 
 
-class ChatAppend(BaseModel):
+class ChatStreamInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    role: ChatRole
     content: str = Field(min_length=1)
     metadata: ChatMetadata = Field(default_factory=ChatMetadata)
 
@@ -33,6 +33,32 @@ class ChatAppend(BaseModel):
         if not value.strip():
             raise ValueError("消息内容不能为空白")
         return value
+
+
+class ChatAppend(ChatStreamInput):
+    role: ChatRole
+
+
+class ToolCallAudit(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    id: str
+    owner_user_id: str
+    chat_session_id: str | None
+    diagnostic_task_id: str | None
+    tool_name: str
+    arguments: dict[str, JsonValue]
+    status: Literal["started", "completed", "failed"]
+    result_summary: str | None
+    error_message: str | None
+    started_at: datetime
+    completed_at: datetime | None
+    duration_ms: int | None
+
+    @field_validator("started_at", "completed_at")
+    @classmethod
+    def utc_timestamp(cls, value: datetime | None) -> datetime | None:
+        return value.replace(tzinfo=timezone.utc) if value is not None else None
 
 
 class ChatMessage(ChatAppend):

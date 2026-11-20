@@ -1,6 +1,35 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { apiClient, parseSseFrames, sseClient } from '../src/transport'
 
+it('decodes multibyte chat data across byte boundaries and preserves event order', async () => {
+  const events = [
+    { id: 'turn:1', type: 'tool.call', data: { toolId: 'tool', status: 'started' } },
+    { id: 'turn:2', type: 'content.delta', data: { text: '😀' } },
+    { id: 'turn:3', type: 'content.delta', data: { text: '你' } },
+    { id: 'turn:4', type: 'complete', data: { result: { messageId: 'answer' } } },
+  ].map((event, index) => ({
+    ...event, sequence: index + 1, channel: 'chat', timestamp: '2026-11-18T00:00:00Z',
+  }))
+  const bytes = new TextEncoder().encode(events.map(event =>
+    `id: ${event.id}\r\nevent: ${event.type}\r\ndata: ${JSON.stringify(event)}\r\n\r\n`,
+  ).join(''))
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new ReadableStream({
+    start(controller) {
+      for (const byte of bytes) controller.enqueue(Uint8Array.of(byte))
+      controller.close()
+    },
+  }))))
+  try {
+    const parsed = []
+    for await (const event of sseClient('/chat/sessions/id/messages:stream', { method: 'POST' })) {
+      parsed.push(event)
+    }
+    expect(parsed).toEqual(events)
+  } finally {
+    vi.unstubAllGlobals()
+  }
+})
+
 afterEach(() => vi.unstubAllGlobals())
 
 const frame = 'event: content.delta\r\ndata: {"id":"1","channel":"chat","timestamp":"x","data":{"text":"你好"}}\r\n\r\n'

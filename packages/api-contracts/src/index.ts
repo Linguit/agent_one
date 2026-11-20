@@ -11,12 +11,12 @@ export type FailureEnvelope = { ok: false; error: ApiError; meta: RequestMeta }
 export type ApiEnvelope<T> = SuccessEnvelope<T> | FailureEnvelope
 export type Channel = 'chat' | 'aiops'
 export type SseType = 'content.delta' | 'reasoning.delta' | 'tool.call' | 'reference.source' | 'task.status' | 'report' | 'complete' | 'error'
-export type SseBase<T extends SseType, D> = { id: string; type: T; channel: Channel; timestamp: string; data: D }
+export type SseBase<T extends SseType, D> = { id: string; type: T; channel: Channel; timestamp: string; sequence?: number; data: D }
 export type ToolStatus = 'started' | 'delta' | 'completed' | 'failed'
 export type SseEvent =
   | SseBase<'content.delta', { text: string }>
   | SseBase<'reasoning.delta', { text: string }>
-  | SseBase<'tool.call', { toolId: string; status: ToolStatus; delta?: unknown }>
+  | SseBase<'tool.call', { toolId: string; status: ToolStatus; toolName?: string; delta?: unknown }>
   | SseBase<'reference.source', { title: string; uri: string }>
   | SseBase<'task.status', { status: string }>
   | SseBase<'report', { content: unknown }>

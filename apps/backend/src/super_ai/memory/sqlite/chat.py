@@ -11,6 +11,7 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from super_ai.chat_contracts import DEFAULT_TITLE, TITLE_LIMIT, ChatRole
+from super_ai.memory.sqlite.tool_audits import audits, chat_audits_filter
 from super_ai.tenant import OwnerScope
 
 sessions = table(
@@ -148,6 +149,10 @@ class ChatRepository:
             )
             return _session_record(row), [_message_record(item) for item in result.mappings()]
 
+    async def require_session(self, scope: OwnerScope, session_id: str) -> None:
+        async with self._factory() as db:
+            await self._require(db, scope, session_id)
+
     async def append(
         self,
         scope: OwnerScope,
@@ -156,9 +161,21 @@ class ChatRepository:
         role: ChatRole,
         content: str,
         metadata: dict[str, JsonValue],
+        after_user_message_id: str | None = None,
     ) -> tuple[SessionRecord, MessageRecord]:
         async with self._transaction(write=True) as db:
             row = await self._require(db, scope, session_id)
+            if after_user_message_id is not None:
+                anchor = await db.scalar(
+                    select(messages.c.id).where(
+                        messages.c.id == after_user_message_id,
+                        messages.c.owner_user_id == scope.owner_user_id,
+                        messages.c.session_id == session_id,
+                        messages.c.role == "user",
+                    )
+                )
+                if anchor is None:
+                    raise ChatAccessDenied
             sequence = cast(int, row["last_sequence"]) + 1
             now = max(_now(), cast(datetime, row["updated_at"]) + timedelta(microseconds=1))
             first_user = role == "user" and not row["has_user_message"]
@@ -218,6 +235,7 @@ class ChatRepository:
         async with self._transaction(write=True) as db:
             await self._require(db, scope, session_id)
             await self._remove_messages(db, scope, session_id)
+            await db.execute(audits.delete().where(*chat_audits_filter(scope, session_id)))
             await db.execute(
                 sessions.delete().where(
                     sessions.c.owner_user_id == scope.owner_user_id, sessions.c.id == session_id

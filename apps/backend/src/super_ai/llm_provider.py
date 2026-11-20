@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import AsyncExitStack, asynccontextmanager
 from time import perf_counter
-from typing import TYPE_CHECKING, Literal, Protocol, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict, cast
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
@@ -15,6 +15,7 @@ from super_ai.llm_config import ModelConfig
 from super_ai.project_config import JsonObject
 
 if TYPE_CHECKING:
+    from langchain_core.language_models import BaseChatModel
     from langchain_core.messages import BaseMessage
 
 
@@ -79,14 +80,35 @@ class QwenOpenAIProvider:
         openai_client: httpx.AsyncClient,
         rerank_client: httpx.AsyncClient,
     ) -> None:
+        from langchain_core.outputs import ChatResult
         from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+        from openai import BaseModel as OpenAIModel
+
+        class QwenChatModel(ChatOpenAI):
+            def _create_chat_result(
+                self,
+                response: dict[str, Any] | OpenAIModel,
+                generation_info: dict[str, Any] | None = None,
+            ) -> ChatResult:
+                result = super()._create_chat_result(  # pyright: ignore[reportUnknownMemberType]
+                    response, generation_info
+                )
+                payload = (
+                    response if isinstance(response, dict) else response.model_dump(warnings=False)
+                )
+                choices = cast(list[dict[str, Any]], payload["choices"])
+                for generation, choice in zip(result.generations, choices, strict=True):
+                    reasoning = choice["message"].get("reasoning_content")
+                    if isinstance(reasoning, str) and reasoning:
+                        generation.message.additional_kwargs["reasoning_content"] = reasoning
+                return result
 
         self._config = config.llm
         profile = config.modelCapabilities[config.llm.chatModel]
         self._context_window_tokens = profile.contextWindowTokens
         self._rerank_client = rerank_client
         try:
-            self._chat = ChatOpenAI(
+            self._chat = QwenChatModel(
                 model=self._config.chatModel,
                 api_key=self._config.apiKey,
                 base_url=str(self._config.baseUrl),
@@ -124,6 +146,10 @@ class QwenOpenAIProvider:
     @property
     def context_window_tokens(self) -> int:
         return self._context_window_tokens
+
+    @property
+    def chat_model(self) -> BaseChatModel:
+        return self._chat
 
     async def chat(self, messages: str | list[BaseMessage]) -> BaseMessage:
         return await self._invoke_chat(messages)
@@ -228,7 +254,7 @@ async def create_llm_provider(
     *,
     openai_client: httpx.AsyncClient | None = None,
     rerank_client: httpx.AsyncClient | None = None,
-) -> AsyncGenerator[LlmProvider, None]:
+) -> AsyncGenerator[QwenOpenAIProvider, None]:
     """从合并后的配置创建提供者，并在退出时关闭工厂自建的客户端。"""
     settings = ModelConfig.from_project(config)
     async with AsyncExitStack() as stack:

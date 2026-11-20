@@ -3,8 +3,9 @@ from typing import Annotated, cast
 from fastapi import APIRouter, Depends, Request
 from fastapi.security import HTTPBearer
 from pydantic import JsonValue
-from starlette.responses import Response
+from starlette.responses import Response, StreamingResponse
 
+from super_ai.agent_chat import ChatAgent
 from super_ai.auth import current_user
 from super_ai.chat_contracts import (
     ChatAppend,
@@ -16,6 +17,8 @@ from super_ai.chat_contracts import (
     ChatMessage,
     ChatMetadata,
     ChatSession,
+    ChatStreamInput,
+    ToolCallAudit,
 )
 from super_ai.contracts import FailureEnvelope, failure, success
 from super_ai.memory.sqlite.chat import (
@@ -24,6 +27,7 @@ from super_ai.memory.sqlite.chat import (
     MessageRecord,
     SessionRecord,
 )
+from super_ai.memory.sqlite.tool_audits import ToolAuditRepository
 from super_ai.tenant import OwnerScope
 
 
@@ -62,6 +66,47 @@ router = APIRouter(
     dependencies=[Depends(HTTPBearer(auto_error=False))],
     responses={401: {"model": FailureEnvelope}, 500: {"model": FailureEnvelope}},
 )
+
+
+@router.get(
+    "/{id}/tool-call-audits", response_model=ChatEnvelope[list[ToolCallAudit]], responses=FORBIDDEN
+)
+async def tool_call_audits(id: str, request: Request, scope: Owner, repo: Repository) -> Response:
+    try:
+        await repo.require_session(scope, id)
+    except ChatAccessDenied:
+        return failure("AUTH_FORBIDDEN", request)
+    audits = cast(ToolAuditRepository, request.app.state.tool_audits)
+    return success(
+        [row.model_dump(mode="json", by_alias=True) for row in await audits.list_chat(scope, id)],
+        request,
+    )
+
+
+@router.post(
+    "/{id}/messages:stream",
+    response_model=None,
+    responses={**FORBIDDEN, **VALIDATION, 200: {"content": {"text/event-stream": {}}}},
+)
+async def stream_message(
+    id: str, request: Request, scope: Owner, repo: Repository, body: ChatStreamInput
+) -> Response:
+    try:
+        _, user = await repo.append(
+            scope,
+            id,
+            role="user",
+            content=body.content,
+            metadata=cast(dict[str, JsonValue], body.metadata.model_dump(mode="json")),
+        )
+    except ChatAccessDenied:
+        return failure("AUTH_FORBIDDEN", request)
+    agent = cast(ChatAgent, request.app.state.chat_agent)
+    return StreamingResponse(
+        agent.stream(scope, user, cast(str, request.state.request_id)),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("", response_model=ChatEnvelope[ChatSession], responses=VALIDATION)

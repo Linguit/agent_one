@@ -1,6 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { ChatDetail, ChatSession } from '@super-ai/api-contracts'
+import type { ChatDetail, ChatSession, SseEvent } from '@super-ai/api-contracts'
 import { useAuthStore } from '../src/auth'
 import { useChatStore } from '../src/chatStore'
 
@@ -12,6 +12,41 @@ const original: ChatSession = {
 beforeEach(() => {
   setActivePinia(createPinia())
   useAuthStore().user = user
+})
+
+it('starts each live turn without references and reloads each answer from its own metadata', async () => {
+  const auth = useAuthStore()
+  const store = useChatStore()
+  const reference = { title: '资料', uri: '/source' }
+  const data: ChatDetail = { session: original, messages: [] }
+  let count = 0
+  vi.spyOn(auth, 'request').mockImplementation(async path =>
+    path.endsWith('/sessions') ? [original] : data,
+  )
+  const stream = vi.spyOn(auth, 'stream').mockImplementation(async function* () {
+    const base = { id: 'event', channel: 'chat', timestamp: original.createdAt } as const
+    expect(store.liveTurn?.references).toEqual([])
+    count++
+    if (count === 1) {
+      yield { ...base, type: 'reference.source', data: reference } satisfies SseEvent
+      expect(store.liveTurn?.references).toEqual([reference])
+    }
+    data.messages.push({
+      id: `message-${count}`, sessionId: original.id, sequence: count, role: 'assistant',
+      content: '回答', createdAt: original.createdAt,
+      metadata: { references: count === 1 ? [reference] : [], toolCallIds: [] },
+    })
+    yield { ...base, type: 'complete', data: {} } satisfies SseEvent
+  })
+  await store.send(original.id, { content: '查询资料' })
+  await store.send(original.id, { content: '你好' })
+  expect(stream).toHaveBeenCalledWith('/chat/sessions/first/messages:stream', expect.objectContaining({
+    method: 'POST', body: JSON.stringify({ content: '你好' }),
+  }))
+  await store.select(original.id)
+  expect(store.liveTurn).toBeNull()
+  const restored = store.detail as ChatDetail | null
+  expect(restored?.messages.map(message => message.metadata.references)).toEqual([[reference], []])
 })
 
 it('reconciles each mutation with the list and selected detail on the server', async () => {

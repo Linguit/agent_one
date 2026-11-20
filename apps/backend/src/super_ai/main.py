@@ -2,7 +2,7 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from copy import deepcopy
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
+from super_ai.agent_chat import ChatAgent, ChatModelFactory
 from super_ai.auth import AuthService, current_user, get_auth_service
 from super_ai.chat_api import router as chat_router
 from super_ai.contracts import failure, success
@@ -29,9 +30,13 @@ from super_ai.memory.sqlite.chat import ChatRepository
 from super_ai.memory.sqlite.documents import DeleteVectors, DocumentRepository
 from super_ai.memory.sqlite.index_tasks import INDEX_TASK_KIND
 from super_ai.memory.sqlite.jobs import JobRepository
+from super_ai.memory.sqlite.tool_audits import ToolAuditRepository
 from super_ai.project_config import JsonObject, load_project_config
 from super_ai.tenant import OwnerScope
 from super_ai.vector_store import MilvusVectorStore, VectorStoreConfig
+
+if TYPE_CHECKING:
+    from langchain_core.language_models import BaseChatModel
 
 
 #   定义一个会包住所有请求的中间件
@@ -60,6 +65,7 @@ def create_app(
     config_dir: Path | None = None,
     job_handlers: JobHandlers | None = None,
     delete_document_vectors: DeleteVectors | None = None,
+    chat_model_factory: ChatModelFactory | None = None,
 ) -> FastAPI:
     if config is not None and config_dir is not None:
         raise ValueError("config 与 config_dir 不能同时指定")
@@ -72,6 +78,11 @@ def create_app(
         return store.delete_existing_document(scope, kb, document)
 
     @asynccontextmanager
+    async def open_chat_model() -> AsyncGenerator["BaseChatModel"]:
+        async with create_llm_provider(project_config) as provider:
+            yield provider.chat_model
+
+    @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         engine = create_engine(DatabaseSettings(url=db_url))
         try:
@@ -80,14 +91,21 @@ def create_app(
             app.state.db_engine = engine
             app.state.db_session_factory = factory
             app.state.job_repository = repository
-            app.state.chat_repository = ChatRepository(factory)
+            chat = ChatRepository(factory)
+            audits = ToolAuditRepository(factory)
+            app.state.chat_repository = chat
+            app.state.tool_audits = audits
             app.state.document_repository = DocumentRepository(
                 factory, delete_document_vectors or delete_vectors
             )
-            app.state.knowledge_retrieval = KnowledgeRetrieval(
+            knowledge = KnowledgeRetrieval(
                 factory,
                 lambda: create_llm_provider(project_config),
                 lambda: MilvusVectorStore(VectorStoreConfig.from_project(project_config)),
+            )
+            app.state.knowledge_retrieval = knowledge
+            app.state.chat_agent = ChatAgent(
+                chat_model_factory or open_chat_model, knowledge.tool, chat, audits
             )
             handlers = JobHandlers()
             if job_handlers is not None:

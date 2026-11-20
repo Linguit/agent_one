@@ -20,6 +20,8 @@ dependencies = [
   "pymilvus>=3,<4",
   "pypdf>=6,<7",
   "python-multipart>=0.0.22,<1",
+  "langchain>=1,<2",
+  "langgraph>=1,<2",
 ]
 
 [dependency-groups]
