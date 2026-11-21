@@ -16,6 +16,7 @@ from starlette.responses import Response
 from super_ai.agent_chat import ChatAgent, ChatModelFactory
 from super_ai.auth import AuthService, current_user, get_auth_service
 from super_ai.chat_api import router as chat_router
+from super_ai.configuration_api import router as configuration_router
 from super_ai.contracts import failure, success
 from super_ai.document_api import router as document_router
 from super_ai.document_indexing import DocumentIndexer
@@ -27,6 +28,7 @@ from super_ai.llm_provider import create_llm_provider
 from super_ai.memory.config import DatabaseSettings
 from super_ai.memory.engine import create_engine, session_factory
 from super_ai.memory.sqlite.chat import ChatRepository
+from super_ai.memory.sqlite.configuration import ConfigurationRepository
 from super_ai.memory.sqlite.documents import DeleteVectors, DocumentRepository
 from super_ai.memory.sqlite.index_tasks import INDEX_TASK_KIND
 from super_ai.memory.sqlite.jobs import JobRepository
@@ -95,6 +97,8 @@ def create_app(
             audits = ToolAuditRepository(factory)
             app.state.chat_repository = chat
             app.state.tool_audits = audits
+            configuration = ConfigurationRepository(factory)
+            app.state.chat_configuration = configuration
             app.state.document_repository = DocumentRepository(
                 factory, delete_document_vectors or delete_vectors
             )
@@ -105,7 +109,7 @@ def create_app(
             )
             app.state.knowledge_retrieval = knowledge
             app.state.chat_agent = ChatAgent(
-                chat_model_factory or open_chat_model, knowledge.tool, chat, audits
+                chat_model_factory or open_chat_model, knowledge.tool, chat, audits, configuration
             )
             handlers = JobHandlers()
             if job_handlers is not None:
@@ -127,6 +131,7 @@ def create_app(
     app.state.project_config = project_config
     app.include_router(job_router)
     app.include_router(chat_router)
+    app.include_router(configuration_router)
     app.include_router(document_router)
     app.include_router(index_router)
     app.add_middleware(RequestIdMiddleware)

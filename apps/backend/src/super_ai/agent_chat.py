@@ -15,13 +15,16 @@ from pydantic import BaseModel, JsonValue, TypeAdapter
 
 from super_ai.contracts import ERROR_CATALOG
 from super_ai.memory.sqlite.chat import ChatRepository, MessageRecord
+from super_ai.memory.sqlite.configuration import ConfigurationRepository
 from super_ai.memory.sqlite.tool_audits import ToolAuditRepository
+from super_ai.progressive_skills import assemble_configuration
 from super_ai.tenant import OwnerScope
 
 if TYPE_CHECKING:
     from langchain.agents.middleware import AgentState, ToolCallRequest
+    from langchain.agents.middleware.types import InputAgentState
     from langchain_core.language_models import BaseChatModel
-    from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
+    from langchain_core.messages import AIMessage, AnyMessage, ToolMessage
     from langchain_core.tools import BaseTool
     from langgraph.runtime import Runtime
     from langgraph.types import Command
@@ -62,11 +65,11 @@ def _reasoning(message: AIMessage) -> str:
     )
 
 
-def _history(records: list[MessageRecord], user: MessageRecord) -> list[BaseMessage]:
+def _history(records: list[MessageRecord], user: MessageRecord) -> list[AnyMessage]:
     from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
     constructors = {"user": HumanMessage, "assistant": AIMessage, "system": SystemMessage}
-    result: list[BaseMessage] = []
+    result: list[AnyMessage] = []
     for record in records:
         factory = constructors.get(record.role)
         if factory is not None and record.sequence < user.sequence:
@@ -82,11 +85,13 @@ class ChatAgent:
         knowledge_tool: Callable[[OwnerScope], BaseTool],
         chat: ChatRepository,
         audits: ToolAuditRepository,
+        configuration: ConfigurationRepository,
     ) -> None:
         self._model = model
         self._knowledge_tool = knowledge_tool
         self._chat = chat
         self._audits = audits
+        self._configuration = configuration
 
     async def stream(
         self, scope: OwnerScope, user: MessageRecord, request_id: str
@@ -209,7 +214,7 @@ class ChatAgent:
                 int((perf_counter() - start) * 1000),
                 result_summary=f"返回 {len(sources)} 条检索结果。"
                 if name == "knowledge_retrieval"
-                else "已获取当前时间。",
+                else ("已按需加载 Skill。" if name == "load_skill" else "已获取当前时间。"),
             )
             report("completed")
             for source in sources:
@@ -227,18 +232,24 @@ class ChatAgent:
             if not any(record.id == user.id for record in history):
                 raise RuntimeError("会话消息已清空")
             final: AIMessage | None = None
+            configuration = await assemble_configuration(self._configuration, scope)
             with tracing_context(enabled=False):
                 async with self._model() as model:
                     agent = create_agent(
                         model,
-                        tools=[self._knowledge_tool(scope), tool(get_current_time)], #使用bml25算法和向量检索返回的知识库文档
+                        tools=[
+                            self._knowledge_tool(scope),
+                            tool(get_current_time),
+                            configuration.skill_tool,
+                        ],
                         middleware=[require_successful_tools, audit_tool],
-                        system_prompt="根据用户意图决定是否调用工具。需要知识库资料时使用知识检索。",
+                        system_prompt=configuration.system_prompt,
                     )
+                    input_state: InputAgentState = {"messages": [*_history(history, user)]}
                     updates = cast(
                         AsyncGenerator[dict[str, Any]],
                         agent.astream(  # pyright: ignore[reportUnknownMemberType]
-                            {"messages": _history(history, user)},
+                            input_state,
                             stream_mode="updates",
                             config={"recursion_limit": 24},
                         ),

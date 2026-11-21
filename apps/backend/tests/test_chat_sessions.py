@@ -192,6 +192,7 @@ async def test_agent_chat_stream(
         assert {item["function"]["name"] for item in payload["tools"]} == {
             "knowledge_retrieval",
             "get_current_time",
+            "load_skill",
         }
         last = payload["messages"][-1]
         value = last["content"]

@@ -22,10 +22,11 @@ dependencies = [
   "python-multipart>=0.0.22,<1",
   "langchain>=1,<2",
   "langgraph>=1,<2",
+  "pyyaml>=6,<7",
 ]
 
 [dependency-groups]
-dev = ["pytest>=8,<10", "pytest-asyncio>=0.24,<2", "httpx>=0.27,<1", "ruff>=0.9,<1", "pyright>=1.1.390,<2"]
+dev = ["pytest>=8,<10", "pytest-asyncio>=0.24,<2", "httpx>=0.27,<1", "ruff>=0.9,<1", "pyright>=1.1.390,<2", "types-pyyaml>=6,<7"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/super_ai"]

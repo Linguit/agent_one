@@ -22,3 +22,5 @@ Compose 最终只运行 etcd、MinIO、Milvus、Attu、Alertmanager；前后端�
 完整技术栈、tenant 隔离与真实 MCP 约束见根 AGENTS.md。文档和规范正文使用简体中文；提交采用 Conventional Commits。
 
 当前依赖审计及固定版本限制见 [依赖检查记录](dependency-notes.md)。
+
+P16 的用户 Prompt、配置 API 与渐进 Skill 使用方式见 [Prompt 与渐进 Skill](guide/progressive-skills.md)。

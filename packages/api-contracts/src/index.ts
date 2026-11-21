@@ -155,3 +155,4 @@ export type KnowledgeRetrievalCitation = {
 
 export type KnowledgeRetrievalToolOutput = { results: KnowledgeRetrievalCitation[] }
 export type * from './chat'
+export * from './configuration'
