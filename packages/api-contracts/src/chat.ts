@@ -39,7 +39,18 @@ export interface ChatSession {
   title: string
   createdAt: string
   updatedAt: string
+  memoryMode: MemoryMode
+  memorySummary: string
+  contextTokens: number
+  contextWindowTokens: number
+  contextUsagePercent: number
+  compactedMessageCount: number
+  lastCompactedAt: string | null
+  canCompact: boolean
 }
+
+export type MemoryMode = 'every_30_turns' | 'context_70_percent' | 'manual'
+export interface ChatMemoryUpdate { memoryMode: MemoryMode }
 
 export interface ChatMessage extends ChatAppend {
   id: string

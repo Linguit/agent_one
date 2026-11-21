@@ -7,6 +7,7 @@ from pydantic.alias_generators import to_camel
 from super_ai.contracts import Meta
 
 ChatRole = Literal["user", "assistant", "system", "tool"]
+MemoryMode = Literal["every_30_turns", "context_70_percent", "manual"]
 DEFAULT_TITLE = "新会话"
 TITLE_LIMIT = 80
 
@@ -73,6 +74,19 @@ class ChatSession(BaseModel):
     title: str = Field(max_length=TITLE_LIMIT)
     createdAt: datetime
     updatedAt: datetime
+    memoryMode: MemoryMode = "every_30_turns"
+    memorySummary: str = ""
+    contextTokens: int = Field(default=0, ge=0)
+    contextWindowTokens: int = Field(gt=0)
+    contextUsagePercent: float = Field(ge=0)
+    compactedMessageCount: int = Field(default=0, ge=0)
+    lastCompactedAt: datetime | None = None
+    canCompact: bool
+
+
+class ChatMemoryUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    memoryMode: MemoryMode
 
 
 class ChatDetail(BaseModel):

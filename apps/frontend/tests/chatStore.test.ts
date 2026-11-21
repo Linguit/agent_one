@@ -7,11 +7,57 @@ import { useChatStore } from '../src/chatStore'
 const user = { id: 'alice', email: 'alice@example.test' }
 const original: ChatSession = {
   id: 'first', title: '新会话', createdAt: '2026-11-18T00:00:00Z', updatedAt: '2026-11-18T00:00:00Z',
+  memoryMode: 'every_30_turns', memorySummary: '', contextTokens: 100, contextWindowTokens: 1000,
+  contextUsagePercent: 10, compactedMessageCount: 0, lastCompactedAt: null, canCompact: false,
 }
 
 beforeEach(() => {
   setActivePinia(createPinia())
   useAuthStore().user = user
+})
+
+it('updates and compacts memory then reconciles fresh server state', async () => {
+  const auth = useAuthStore()
+  let session = { ...original }
+  const request = vi.spyOn(auth, 'request').mockImplementation(async (path, options) => {
+    if (path.endsWith('/memory')) {
+      expect(options?.method).toBe('PUT')
+      expect(JSON.parse(options?.body as string)).toEqual({ memoryMode: 'manual' })
+      session = { ...session, memoryMode: 'manual' }
+      return session
+    }
+    if (path.endsWith('/memory:compact')) {
+      expect(options?.method).toBe('POST')
+      session = { ...session, memorySummary: '摘要', compactedMessageCount: 60,
+        contextTokens: 20, contextUsagePercent: 2 }
+      return session
+    }
+    return path.endsWith('/sessions') ? [session] : { session, messages: [] }
+  })
+  const store = useChatStore()
+  await store.select(original.id)
+  await store.updateMemory(original.id, 'manual')
+  expect(store.detail?.session.memoryMode).toBe('manual')
+  await store.compactMemory(original.id)
+  expect(store.detail?.session).toEqual(session)
+  expect(store.sessions).toEqual([session])
+  request.mockRejectedValueOnce(new Error('压缩失败'))
+  await expect(store.compactMemory(original.id)).rejects.toThrow('压缩失败')
+  expect(store.detail?.session).toEqual(session)
+})
+
+it('discards an in-flight memory response after switching owner', async () => {
+  const auth = useAuthStore()
+  let finish!: (value: ChatSession) => void
+  vi.spyOn(auth, 'request').mockReturnValueOnce(new Promise(resolve => { finish = resolve }))
+  const store = useChatStore()
+  const update = store.updateMemory(original.id, 'manual')
+  await Promise.resolve()
+  auth.user = { id: 'bob', email: 'bob@example.test' }
+  finish({ ...original, memoryMode: 'manual' })
+  await update
+  expect(store.sessions).toEqual([])
+  expect(store.detail).toBeNull()
 })
 
 it('starts each live turn without references and reloads each answer from its own metadata', async () => {

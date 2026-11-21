@@ -325,7 +325,14 @@ async def test_model_calls_load_skill_without_preinjection(tmp_path: Path, selec
             ) as provider:
                 yield provider.chat_model
 
-    app = create_app(config={"database": {"url": url}}, chat_model_factory=model)
+    app = create_app(
+        config={
+            "database": {"url": url},
+            "llm": {"chatModel": "qwen3.7-max"},
+            "modelCapabilities": {"qwen3.7-max": {"contextWindowTokens": 1000000}},
+        },
+        chat_model_factory=model,
+    )
     async with (
         app.router.lifespan_context(app),
         httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client,

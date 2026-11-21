@@ -32,6 +32,21 @@ class FailureEnvelope(BaseModel):
 
 
 ERROR_CATALOG: dict[str, tuple[Literal["AUTH", "BUSINESS", "VALIDATION", "SYSTEM"], int, str]] = {
+    "CHAT_CONTEXT_LIMIT_REACHED": (
+        "BUSINESS",
+        409,
+        "上下文已达到模型窗口的 95%，请手动压缩后重试。",
+    ),
+    "CHAT_MODEL_CAPABILITY_INVALID": (
+        "SYSTEM",
+        500,
+        "modelCapabilities 缺少所选对话模型的有效 contextWindowTokens。",
+    ),
+    "CHAT_MEMORY_COMPACTION_FAILED": (
+        "SYSTEM",
+        502,
+        "记忆压缩失败，原有历史与记忆保持不变，请重试。",
+    ),
     "AUTH_INVALID_CREDENTIALS": ("AUTH", 401, "邮箱或密码错误。"),
     "AUTH_UNAUTHORIZED": ("AUTH", 401, "需要认证。"),
     "AUTH_FORBIDDEN": ("AUTH", 403, "无权访问该资源。"),

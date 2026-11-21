@@ -24,3 +24,5 @@ Compose 最终只运行 etcd、MinIO、Milvus、Attu、Alertmanager；前后端�
 当前依赖审计及固定版本限制见 [依赖检查记录](dependency-notes.md)。
 
 P16 的用户 Prompt、配置 API 与渐进 Skill 使用方式见 [Prompt 与渐进 Skill](guide/progressive-skills.md)。
+
+P17 的三种策略、预算防护及管理 API 见 [会话记忆模式](guide/session-memory.md)。

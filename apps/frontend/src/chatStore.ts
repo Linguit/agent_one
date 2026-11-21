@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
-import type { ChatAppend, ChatDetail, ChatList, ChatStreamInput, SseEvent } from '@super-ai/api-contracts'
+import type { ChatAppend, ChatDetail, ChatList, ChatStreamInput, MemoryMode, SseEvent } from '@super-ai/api-contracts'
 import { useAuthStore } from './auth'
 import { createChatClient } from './chatClient'
 import { ApiRequestError } from './transport'
@@ -128,5 +128,20 @@ export const useChatStore = defineStore('chat', () => {
     })
   }
 
-  return { sessions, detail, liveTurn, refresh, select, create, append, send, clear, remove }
+  function updateMemory(id: string, memoryMode: MemoryMode) {
+    return enqueue(async current => {
+      await client.updateMemory(id, { memoryMode })
+      await reconcile(detail.value?.session.id ?? id, current)
+    })
+  }
+
+  function compactMemory(id: string) {
+    return enqueue(async current => {
+      await client.compactMemory(id)
+      await reconcile(detail.value?.session.id ?? id, current)
+    })
+  }
+
+  return { sessions, detail, liveTurn, refresh, select, create, append, send, clear, remove,
+    updateMemory, compactMemory }
 })

@@ -1,4 +1,4 @@
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -10,7 +10,7 @@ from sqlalchemy import JSON, Boolean, DateTime, Integer, String, column, select,
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from super_ai.chat_contracts import DEFAULT_TITLE, TITLE_LIMIT, ChatRole
+from super_ai.chat_contracts import DEFAULT_TITLE, TITLE_LIMIT, ChatRole, MemoryMode
 from super_ai.memory.sqlite.tool_audits import audits, chat_audits_filter
 from super_ai.tenant import OwnerScope
 
@@ -23,6 +23,11 @@ sessions = table(
     column("updated_at", DateTime),
     column("last_sequence", Integer),
     column("has_user_message", Boolean),
+    column("memory_mode", String),
+    column("memory_summary", String),
+    column("compacted_message_count", Integer),
+    column("context_tokens", Integer),
+    column("last_compacted_at", DateTime),
 )
 messages = table(
     "chat_messages",
@@ -47,6 +52,11 @@ class SessionRecord:
     title: str
     created_at: datetime
     updated_at: datetime
+    memory_mode: MemoryMode = "every_30_turns"
+    memory_summary: str = ""
+    compacted_message_count: int = 0
+    context_tokens: int = 0
+    last_compacted_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -70,6 +80,13 @@ def _session_record(row: RowMapping) -> SessionRecord:
         row["title"],
         row["created_at"].replace(tzinfo=timezone.utc),
         row["updated_at"].replace(tzinfo=timezone.utc),
+        row["memory_mode"],
+        row["memory_summary"],
+        row["compacted_message_count"],
+        row["context_tokens"],
+        row["last_compacted_at"].replace(tzinfo=timezone.utc)
+        if row["last_compacted_at"] is not None
+        else None,
     )
 
 
@@ -88,6 +105,57 @@ def _message_record(row: RowMapping) -> MessageRecord:
 class ChatRepository:
     def __init__(self, factory: async_sessionmaker[AsyncSession]) -> None:
         self._factory = factory
+        self.prepare_append: (
+            Callable[
+                [OwnerScope, SessionRecord, list[MessageRecord], ChatRole, str],
+                Awaitable[SessionRecord],
+            ]
+            | None
+        ) = None
+
+    async def _history(
+        self, db: AsyncSession, scope: OwnerScope, session_id: str
+    ) -> list[MessageRecord]:
+        result = await db.execute(
+            select(messages)
+            .where(
+                messages.c.owner_user_id == scope.owner_user_id,
+                messages.c.session_id == session_id,
+            )
+            .order_by(messages.c.sequence)
+        )
+        return [_message_record(row) for row in result.mappings()]
+
+    async def _save_memory(
+        self, db: AsyncSession, scope: OwnerScope, record: SessionRecord
+    ) -> SessionRecord:
+        result = await db.execute(
+            sessions.update()
+            .where(sessions.c.owner_user_id == scope.owner_user_id, sessions.c.id == record.id)
+            .values(
+                memory_mode=record.memory_mode,
+                memory_summary=record.memory_summary,
+                compacted_message_count=record.compacted_message_count,
+                context_tokens=record.context_tokens,
+                last_compacted_at=record.last_compacted_at.replace(tzinfo=None)
+                if record.last_compacted_at
+                else None,
+            )
+            .returning(*sessions.c)
+        )
+        return _session_record(result.mappings().one())
+
+    async def memory_operation(
+        self,
+        scope: OwnerScope,
+        session_id: str,
+        operation: Callable[[SessionRecord, list[MessageRecord]], Awaitable[SessionRecord]],
+    ) -> SessionRecord:
+        async with self._transaction(write=True) as db:
+            row = await self._require(db, scope, session_id)
+            history = await self._history(db, scope, session_id)
+            record = await operation(_session_record(row), history)
+            return await self._save_memory(db, scope, record)
 
     @asynccontextmanager
     async def _transaction(self, *, write: bool) -> AsyncGenerator[AsyncSession, None]:
@@ -176,6 +244,15 @@ class ChatRepository:
                 )
                 if anchor is None:
                     raise ChatAccessDenied
+            if self.prepare_append is not None:
+                record = await self.prepare_append(
+                    scope,
+                    _session_record(row),
+                    await self._history(db, scope, session_id),
+                    role,
+                    content,
+                )
+                await self._save_memory(db, scope, record)
             sequence = cast(int, row["last_sequence"]) + 1
             now = max(_now(), cast(datetime, row["updated_at"]) + timedelta(microseconds=1))
             first_user = role == "user" and not row["has_user_message"]
@@ -225,7 +302,14 @@ class ChatRepository:
                 sessions.update()
                 .where(sessions.c.owner_user_id == scope.owner_user_id, sessions.c.id == session_id)
                 .values(
-                    title=DEFAULT_TITLE, updated_at=now, last_sequence=0, has_user_message=False
+                    title=DEFAULT_TITLE,
+                    updated_at=now,
+                    last_sequence=0,
+                    has_user_message=False,
+                    memory_summary="",
+                    compacted_message_count=0,
+                    context_tokens=0,
+                    last_compacted_at=None,
                 )
                 .returning(*sessions.c)
             )

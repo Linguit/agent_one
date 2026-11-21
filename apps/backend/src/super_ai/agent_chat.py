@@ -18,6 +18,7 @@ from super_ai.memory.sqlite.chat import ChatRepository, MessageRecord
 from super_ai.memory.sqlite.configuration import ConfigurationRepository
 from super_ai.memory.sqlite.tool_audits import ToolAuditRepository
 from super_ai.progressive_skills import assemble_configuration
+from super_ai.session_memory import MemoryFailure, SessionMemory, context_messages
 from super_ai.tenant import OwnerScope
 
 if TYPE_CHECKING:
@@ -65,19 +66,6 @@ def _reasoning(message: AIMessage) -> str:
     )
 
 
-def _history(records: list[MessageRecord], user: MessageRecord) -> list[AnyMessage]:
-    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-
-    constructors = {"user": HumanMessage, "assistant": AIMessage, "system": SystemMessage}
-    result: list[AnyMessage] = []
-    for record in records:
-        factory = constructors.get(record.role)
-        if factory is not None and record.sequence < user.sequence:
-            result.append(factory(content=record.content))
-    result.append(HumanMessage(content=user.content))
-    return result
-
-
 class ChatAgent:
     def __init__(
         self,
@@ -86,12 +74,14 @@ class ChatAgent:
         chat: ChatRepository,
         audits: ToolAuditRepository,
         configuration: ConfigurationRepository,
+        memory: SessionMemory,
     ) -> None:
         self._model = model
         self._knowledge_tool = knowledge_tool
         self._chat = chat
         self._audits = audits
         self._configuration = configuration
+        self._memory = memory
 
     async def stream(
         self, scope: OwnerScope, user: MessageRecord, request_id: str
@@ -140,7 +130,7 @@ class ChatAgent:
     ) -> None:
         from langchain.agents import create_agent  # pyright: ignore[reportUnknownVariableType]
         from langchain.agents.middleware import before_model, wrap_tool_call
-        from langchain_core.messages import AIMessage, ToolMessage
+        from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
         from langchain_core.tools import tool
         from langsmith import tracing_context  # pyright: ignore[reportUnknownVariableType]
 
@@ -156,6 +146,12 @@ class ChatAgent:
         async def require_successful_tools(state: AgentState[Any], runtime: Runtime[None]) -> None:
             if tool_failed:
                 raise RuntimeError("工具执行失败")
+            self._memory.check_limit(
+                [
+                    SystemMessage(content=configuration.system_prompt),
+                    *cast(list["AnyMessage"], state["messages"]),
+                ]
+            )
 
         @wrap_tool_call
         async def audit_tool(
@@ -228,7 +224,7 @@ class ChatAgent:
             return result
 
         try:
-            _, history = await self._chat.detail(scope, session_id)
+            session, history = await self._chat.detail(scope, session_id)
             if not any(record.id == user.id for record in history):
                 raise RuntimeError("会话消息已清空")
             final: AIMessage | None = None
@@ -245,7 +241,13 @@ class ChatAgent:
                         middleware=[require_successful_tools, audit_tool],
                         system_prompt=configuration.system_prompt,
                     )
-                    input_state: InputAgentState = {"messages": [*_history(history, user)]}
+                    # system_prompt 由 create_agent 注入，历史摘要保留在消息上下文中。
+                    context = context_messages(
+                        session,
+                        [row for row in history if row.sequence <= user.sequence],
+                        configuration.system_prompt,
+                    )
+                    input_state: InputAgentState = {"messages": context[1:]}
                     updates = cast(
                         AsyncGenerator[dict[str, Any]],
                         agent.astream(  # pyright: ignore[reportUnknownMemberType]
@@ -282,9 +284,9 @@ class ChatAgent:
             )
             emit("content.delta", {"text": final.text})
             emit("complete", {"result": {"messageId": assistant.id}})
-        except Exception:
+        except Exception as exc:
             logger.warning("Agent 对话失败", extra={"requestId": request_id})
-            code = "SYSTEM_INTERNAL_ERROR"
+            code = exc.code if isinstance(exc, MemoryFailure) else "SYSTEM_INTERNAL_ERROR"
             category, status, message = ERROR_CATALOG[code]
             emit(
                 "error",

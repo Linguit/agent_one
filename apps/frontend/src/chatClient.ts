@@ -1,6 +1,6 @@
 import type {
   ChatAppend, ChatAppended, ChatCleared, ChatCreate, ChatDeleted, ChatDetail, ChatList, ChatSession,
-  ChatStreamInput, ToolCallAudit,
+  ChatStreamInput, ToolCallAudit, ChatMemoryUpdate,
 } from '@super-ai/api-contracts'
 import { useAuthStore } from './auth'
 
@@ -13,6 +13,10 @@ export function createChatClient(auth: Pick<ReturnType<typeof useAuthStore>, 're
     list: () => auth.request<ChatList>(base),
     detail: (id: string) => auth.request<ChatDetail>(sessionPath(id)),
     create: () => auth.request<ChatSession>(base, post({})),
+    updateMemory: (id: string, body: ChatMemoryUpdate) =>
+      auth.request<ChatSession>(`${sessionPath(id)}/memory`, { method: 'PUT', body: JSON.stringify(body) }),
+    compactMemory: (id: string) =>
+      auth.request<ChatSession>(`${sessionPath(id)}/memory:compact`, { method: 'POST' }),
     append: (id: string, body: ChatAppend) =>
       auth.request<ChatAppended>(`${sessionPath(id)}/messages`, post(body)),
     stream: (id: string, body: ChatStreamInput, signal: AbortSignal) =>

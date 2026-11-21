@@ -14,6 +14,7 @@ from super_ai.chat_contracts import (
     ChatDeleted,
     ChatDetail,
     ChatEnvelope,
+    ChatMemoryUpdate,
     ChatMessage,
     ChatMetadata,
     ChatSession,
@@ -28,6 +29,7 @@ from super_ai.memory.sqlite.chat import (
     SessionRecord,
 )
 from super_ai.memory.sqlite.tool_audits import ToolAuditRepository
+from super_ai.session_memory import SessionMemory
 from super_ai.tenant import OwnerScope
 
 
@@ -39,10 +41,8 @@ def _repository(request: Request) -> ChatRepository:
     return cast(ChatRepository, request.app.state.chat_repository)
 
 
-def _session(record: SessionRecord) -> ChatSession:
-    return ChatSession(
-        id=record.id, title=record.title, createdAt=record.created_at, updatedAt=record.updated_at
-    )
+async def _session(request: Request, scope: OwnerScope, record: SessionRecord) -> ChatSession:
+    return await cast(SessionMemory, request.app.state.session_memory).state(scope, record.id)
 
 
 def _message(record: MessageRecord) -> ChatMessage:
@@ -113,13 +113,21 @@ async def stream_message(
 async def create(
     request: Request, scope: Owner, repo: Repository, body: ChatCreate | None = None
 ) -> Response:
-    return success(_session(await repo.create(scope)).model_dump(mode="json"), request)
+    # 配置错误应在新建会话之前暴露。
+    cast(SessionMemory, request.app.state.session_memory).window()
+    return success(
+        (await _session(request, scope, await repo.create(scope))).model_dump(mode="json"), request
+    )
 
 
 @router.get("", response_model=ChatEnvelope[list[ChatSession]])
 async def list_sessions(request: Request, scope: Owner, repo: Repository) -> Response:
     return success(
-        [_session(row).model_dump(mode="json") for row in await repo.list_sessions(scope)], request
+        [
+            (await _session(request, scope, row)).model_dump(mode="json")
+            for row in await repo.list_sessions(scope)
+        ],
+        request,
     )
 
 
@@ -129,7 +137,10 @@ async def detail(id: str, request: Request, scope: Owner, repo: Repository) -> R
         session, messages = await repo.detail(scope, id)
     except ChatAccessDenied:
         return failure("AUTH_FORBIDDEN", request)
-    data = ChatDetail(session=_session(session), messages=[_message(row) for row in messages])
+    data = ChatDetail(
+        session=await _session(request, scope, session),
+        messages=[_message(row) for row in messages],
+    )
     return success(data.model_dump(mode="json"), request)
 
 
@@ -151,7 +162,7 @@ async def append(
         )
     except ChatAccessDenied:
         return failure("AUTH_FORBIDDEN", request)
-    data = ChatAppended(session=_session(session), message=_message(message))
+    data = ChatAppended(session=await _session(request, scope, session), message=_message(message))
     return success(data.model_dump(mode="json"), request)
 
 
@@ -162,7 +173,10 @@ async def clear(id: str, request: Request, scope: Owner, repo: Repository) -> Re
     except ChatAccessDenied:
         return failure("AUTH_FORBIDDEN", request)
     return success(
-        ChatDetail(session=_session(session), messages=[]).model_dump(mode="json"), request
+        ChatDetail(session=await _session(request, scope, session), messages=[]).model_dump(
+            mode="json"
+        ),
+        request,
     )
 
 
@@ -173,3 +187,31 @@ async def delete(id: str, request: Request, scope: Owner, repo: Repository) -> R
     except ChatAccessDenied:
         return failure("AUTH_FORBIDDEN", request)
     return success(ChatDeleted().model_dump(mode="json"), request)
+
+
+@router.put(
+    "/{id}/memory", response_model=ChatEnvelope[ChatSession], responses={**FORBIDDEN, **VALIDATION}
+)
+async def update_memory(
+    id: str, body: ChatMemoryUpdate, request: Request, scope: Owner, repo: Repository
+) -> Response:
+    try:
+        await repo.require_session(scope, id)
+        state = await cast(SessionMemory, request.app.state.session_memory).state(
+            scope, id, mode=body.memoryMode
+        )
+    except ChatAccessDenied:
+        return failure("AUTH_FORBIDDEN", request)
+    return success(state.model_dump(mode="json"), request)
+
+
+@router.post("/{id}/memory:compact", response_model=ChatEnvelope[ChatSession], responses=FORBIDDEN)
+async def compact_memory(id: str, request: Request, scope: Owner, repo: Repository) -> Response:
+    try:
+        await repo.require_session(scope, id)
+        state = await cast(SessionMemory, request.app.state.session_memory).state(
+            scope, id, compact=True
+        )
+    except ChatAccessDenied:
+        return failure("AUTH_FORBIDDEN", request)
+    return success(state.model_dump(mode="json"), request)

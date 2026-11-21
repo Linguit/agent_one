@@ -24,7 +24,7 @@ class RequestConfiguration:
     system_prompt: str
     skill_tool: BaseTool
 
-
+#读取当前用户的配置，组装本次请求的系统提示词，并创建一个供模型按需读取已选 Skill 正文的工具。
 async def assemble_configuration(
     repo: ConfigurationRepository, scope: OwnerScope
 ) -> RequestConfiguration:

@@ -60,7 +60,13 @@ def test_chat_openapi() -> None:
 async def test_chat_lifecycle_and_rollback(tmp_path: Path) -> None:
     url = f"sqlite+aiosqlite:///{(tmp_path / 'chat.db').as_posix()}"
     upgrade_head(url, Path(__file__).resolve().parents[1])
-    app = create_app(config={"database": {"url": url}})
+    app = create_app(
+        config={
+            "database": {"url": url},
+            "llm": {"chatModel": "test"},
+            "modelCapabilities": {"test": {"contextWindowTokens": 100000}},
+        }
+    )
     base = "/chat/sessions"
     async with (
         app.router.lifespan_context(app),

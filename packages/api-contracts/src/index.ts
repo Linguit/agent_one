@@ -23,6 +23,9 @@ export type SseEvent =
   | SseBase<'complete', { result?: unknown }>
   | SseBase<'error', { error: ApiError; meta: RequestMeta }>
 export const ERROR_CATALOG = {
+  CHAT_CONTEXT_LIMIT_REACHED: { category: 'BUSINESS', httpStatus: 409, message: '上下文已达到模型窗口的 95%，请手动压缩后重试。' },
+  CHAT_MODEL_CAPABILITY_INVALID: { category: 'SYSTEM', httpStatus: 500, message: 'modelCapabilities 缺少所选对话模型的有效 contextWindowTokens。' },
+  CHAT_MEMORY_COMPACTION_FAILED: { category: 'SYSTEM', httpStatus: 502, message: '记忆压缩失败，原有历史与记忆保持不变，请重试。' },
   AUTH_UNAUTHORIZED: { category: 'AUTH', httpStatus: 401, message: '需要认证。' },
   AUTH_FORBIDDEN: { category: 'AUTH', httpStatus: 403, message: '无权访问该资源。' },
   AUTH_INVALID_CREDENTIALS: { category: 'AUTH', httpStatus: 401, message: '邮箱或密码错误。' },

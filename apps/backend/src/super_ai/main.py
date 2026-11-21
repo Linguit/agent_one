@@ -34,6 +34,7 @@ from super_ai.memory.sqlite.index_tasks import INDEX_TASK_KIND
 from super_ai.memory.sqlite.jobs import JobRepository
 from super_ai.memory.sqlite.tool_audits import ToolAuditRepository
 from super_ai.project_config import JsonObject, load_project_config
+from super_ai.session_memory import MemoryFailure, SessionMemory
 from super_ai.tenant import OwnerScope
 from super_ai.vector_store import MilvusVectorStore, VectorStoreConfig
 
@@ -99,6 +100,11 @@ def create_app(
             app.state.tool_audits = audits
             configuration = ConfigurationRepository(factory)
             app.state.chat_configuration = configuration
+            memory = SessionMemory(
+                chat, configuration, chat_model_factory or open_chat_model, project_config
+            )
+            app.state.session_memory = memory
+            chat.prepare_append = memory.prepare_append
             app.state.document_repository = DocumentRepository(
                 factory, delete_document_vectors or delete_vectors
             )
@@ -109,7 +115,12 @@ def create_app(
             )
             app.state.knowledge_retrieval = knowledge
             app.state.chat_agent = ChatAgent(
-                chat_model_factory or open_chat_model, knowledge.tool, chat, audits, configuration
+                chat_model_factory or open_chat_model,
+                knowledge.tool,
+                chat,
+                audits,
+                configuration,
+                memory,
             )
             handlers = JobHandlers()
             if job_handlers is not None:
@@ -153,6 +164,10 @@ def create_app(
         response = failure("SYSTEM_INTERNAL_ERROR", request)
         response.headers["X-Request-ID"] = request.state.request_id
         return response
+
+    @app.exception_handler(MemoryFailure)
+    async def memory_handler(request: Request, exc: MemoryFailure) -> JSONResponse:
+        return failure(exc.code, request)
 
     @app.exception_handler(HTTPException)
     async def http_handler(request: Request, exc: HTTPException) -> JSONResponse:
