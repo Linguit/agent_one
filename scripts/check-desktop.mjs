@@ -25,6 +25,7 @@ try {
   let session = false
   let uploaded = false
   let indexTask = false
+  let mcpConnections = []
   const document = { id: 'desktop-document', filename: 'desktop.md', indexStatus: 'pending' }
   await page.route('**/api/**', async route => {
     const request = route.request()
@@ -50,6 +51,23 @@ try {
       return route.fulfill({ json: { ok: true, data: { loggedOut: true } } })
     }
     if (path === '/api/health') return route.fulfill({ json: { ok: true, data: { status: 'ok' } } })
+    // Browser-only API fixture; this is not a real MCP smoke test.
+    if (path.startsWith('/api/mcp/connections') && validSession) {
+      const method = request.method()
+      if (method === 'POST' && path.endsWith(':check')) {
+        mcpConnections = mcpConnections.map(row => ({ ...row,
+          lastCheck: '2026-11-21T01:00:00Z', lastError: null,
+          discoveredTools: [{ name: 'browser_fixture_tool', description: '浏览器测试夹具工具', inputSchema: { type: 'object' } }],
+        }))
+      } else if (method === 'DELETE') mcpConnections = []
+      else if (method !== 'GET') {
+        mcpConnections = [{ ...request.postDataJSON(), id: 'desktop-mcp', owner: user.id,
+          lastCheck: null, lastError: null, discoveredTools: [],
+          createdAt: '2026-11-21T00:00:00Z', updatedAt: '2026-11-21T00:00:00Z' }]
+      }
+      return route.fulfill({ json: { ok: true, data: method === 'GET' ? mcpConnections
+        : method === 'DELETE' ? { deleted: true } : mcpConnections[0] } })
+    }
     if (path === '/api/knowledge-bases' && validSession) {
       return route.fulfill({ json: { ok: true, data: [{ id: 'desktop-kb', name: '默认知识库' }] } })
     }
@@ -93,8 +111,30 @@ try {
     await nav.getByRole('link', { name: title, exact: true }).click()
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(title)
     await expect(page.getByRole('region', { name: '会话' })).toHaveCount(title === '对话' ? 1 : 0)
-    if (title !== '知识库') await expect(page.getByText('功能待接入')).toBeVisible()
+    if (!['知识库', 'MCP'].includes(title)) await expect(page.getByText('功能待接入')).toBeVisible()
   }
+  await nav.getByRole('link', { name: 'MCP', exact: true }).click()
+  await page.getByLabel('名称', { exact: true }).fill('桌面 CLS 测试连接')
+  await page.getByLabel('服务器 URL').fill('http://localhost:9000/mcp')
+  await page.getByLabel('传输方式').selectOption('streamable_http')
+  await page.getByRole('button', { name: '保存连接' }).click()
+  await expect(page.getByRole('heading', { name: '桌面 CLS 测试连接' })).toBeVisible()
+  await page.getByRole('button', { name: '检查连接', exact: true }).click()
+  await expect(page.getByText('发现 1 个工具')).toBeVisible()
+  await page.getByText('已发现工具', { exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'browser_fixture_tool' })).toBeVisible()
+  await page.getByRole('button', { name: '禁用', exact: true }).click()
+  await expect(page.getByText('Streamable HTTP · 已禁用')).toBeVisible()
+  await page.getByRole('button', { name: '编辑', exact: true }).click()
+  await page.getByLabel('名称', { exact: true }).fill('编辑后的 CLS')
+  await page.getByRole('button', { name: '保存连接' }).click()
+  await expect(page.getByRole('heading', { name: '编辑后的 CLS' })).toBeVisible()
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+  mkdirSync(join(repositoryRoot, '.cache'), { recursive: true })
+  await page.screenshot({ path: join(repositoryRoot, '.cache/desktop-mcp.png'), fullPage: true })
+  await page.getByRole('button', { name: '删除', exact: true }).click()
+  await expect(page.getByText('暂无连接。添加真实服务器后检查以发现工具。')).toBeVisible()
+  await nav.getByRole('link', { name: '知识库', exact: true }).click()
   await page.getByLabel('文档', { exact: true }).setInputFiles({
     name: 'desktop.md', mimeType: 'text/markdown', buffer: Buffer.from('desktop smoke'),
   })
@@ -118,7 +158,7 @@ try {
     assert.equal(denied.status(), 403)
   }
   assert.deepEqual(errors, [])
-  console.log('桌面 1440×900：认证、工作台、上传并调度索引、布局及配置访问通过（浏览器接口夹具）')
+  console.log('桌面 1440×900：认证、MCP CRUD/启停/检查/工具展示、索引、布局及配置访问通过（浏览器接口夹具，不代表真实 MCP 验收）')
 } finally {
   await browser?.close()
   await server.close()

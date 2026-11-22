@@ -32,6 +32,15 @@ class FailureEnvelope(BaseModel):
 
 
 ERROR_CATALOG: dict[str, tuple[Literal["AUTH", "BUSINESS", "VALIDATION", "SYSTEM"], int, str]] = {
+    "MCP_TIMEOUT": ("SYSTEM", 504, "MCP 操作超时。"),
+    "MCP_DISCOVERY_FAILED": ("SYSTEM", 502, "MCP 连接或工具发现失败。"),
+    "MCP_CALL_FAILED": ("SYSTEM", 502, "MCP 工具调用失败。"),
+    "MCP_CONFIG_INVALID": ("SYSTEM", 500, "MCP 回退连接配置无效。"),
+    "MCP_TOOL_NAME_CONFLICT": (
+        "BUSINESS",
+        409,
+        "MCP 工具名称冲突，请调整服务器工具或禁用重复连接。",
+    ),
     "CHAT_CONTEXT_LIMIT_REACHED": (
         "BUSINESS",
         409,

@@ -14,6 +14,7 @@ from anyio import CancelScope
 from pydantic import BaseModel, JsonValue, TypeAdapter
 
 from super_ai.contracts import ERROR_CATALOG
+from super_ai.mcp_provider import McpFailure, McpProvider
 from super_ai.memory.sqlite.chat import ChatRepository, MessageRecord
 from super_ai.memory.sqlite.configuration import ConfigurationRepository
 from super_ai.memory.sqlite.tool_audits import ToolAuditRepository
@@ -75,6 +76,7 @@ class ChatAgent:
         audits: ToolAuditRepository,
         configuration: ConfigurationRepository,
         memory: SessionMemory,
+        mcp: McpProvider | None = None,
     ) -> None:
         self._model = model
         self._knowledge_tool = knowledge_tool
@@ -82,6 +84,7 @@ class ChatAgent:
         self._audits = audits
         self._configuration = configuration
         self._memory = memory
+        self._mcp = mcp
 
     async def stream(
         self, scope: OwnerScope, user: MessageRecord, request_id: str
@@ -138,6 +141,7 @@ class ChatAgent:
         references: dict[str, EventData] = {}
         call_ids: list[JsonValue] = []
         tool_failed = False
+        tool_error_code: str | None = None
 
         def emit(kind: EventType, data: EventData) -> None:
             queue.put_nowait((kind, data))
@@ -145,6 +149,8 @@ class ChatAgent:
         @before_model
         async def require_successful_tools(state: AgentState[Any], runtime: Runtime[None]) -> None:
             if tool_failed:
+                if tool_error_code is not None:
+                    raise McpFailure(tool_error_code)
                 raise RuntimeError("工具执行失败")
             self._memory.check_limit(
                 [
@@ -157,7 +163,7 @@ class ChatAgent:
         async def audit_tool(
             request: ToolCallRequest, handler: ToolHandler
         ) -> ToolMessage | Command[Any]:
-            nonlocal tool_failed
+            nonlocal tool_failed, tool_error_code
             name = request.tool_call["name"]
             arguments = TypeAdapter(dict[str, JsonValue]).validate_python(request.tool_call["args"])
             audit_id = await self._audits.start(scope, name, arguments, chat_session_id=session_id)
@@ -198,6 +204,8 @@ class ChatAgent:
                     raise
                 # Let parallel tools finish their audits before stopping the graph.
                 tool_failed = True
+                if isinstance(exc, McpFailure):
+                    tool_error_code = exc.code
                 return ToolMessage(
                     content="工具执行失败。",
                     tool_call_id=request.tool_call["id"],
@@ -210,7 +218,7 @@ class ChatAgent:
                 int((perf_counter() - start) * 1000),
                 result_summary=f"返回 {len(sources)} 条检索结果。"
                 if name == "knowledge_retrieval"
-                else ("已按需加载 Skill。" if name == "load_skill" else "已获取当前时间。"),
+                else ("已按需加载 Skill。" if name == "load_skill" else "工具执行成功。"),
             )
             report("completed")
             for source in sources:
@@ -229,6 +237,7 @@ class ChatAgent:
                 raise RuntimeError("会话消息已清空")
             final: AIMessage | None = None
             configuration = await assemble_configuration(self._configuration, scope)
+            mcp_tools = await self._mcp.tools(scope) if self._mcp is not None else []
             with tracing_context(enabled=False):
                 async with self._model() as model:
                     agent = create_agent(
@@ -237,6 +246,7 @@ class ChatAgent:
                             self._knowledge_tool(scope),
                             tool(get_current_time),
                             configuration.skill_tool,
+                            *mcp_tools,
                         ],
                         middleware=[require_successful_tools, audit_tool],
                         system_prompt=configuration.system_prompt,
@@ -286,7 +296,11 @@ class ChatAgent:
             emit("complete", {"result": {"messageId": assistant.id}})
         except Exception as exc:
             logger.warning("Agent 对话失败", extra={"requestId": request_id})
-            code = exc.code if isinstance(exc, MemoryFailure) else "SYSTEM_INTERNAL_ERROR"
+            code = (
+                exc.code
+                if isinstance(exc, (MemoryFailure, McpFailure))
+                else "SYSTEM_INTERNAL_ERROR"
+            )
             category, status, message = ERROR_CATALOG[code]
             emit(
                 "error",

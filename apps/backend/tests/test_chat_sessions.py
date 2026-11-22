@@ -380,7 +380,7 @@ async def test_agent_chat_stream(
             ("knowledge_retrieval", "failed"),
             ("get_current_time", "completed"),
         }
-        assert audits[0]["arguments"] == {"query": secret_query}
+        assert audits[0]["arguments"] == {"query": "[REDACTED]"}
         assert audits[0]["id"] == tool_id and audits[0]["resultSummary"]
         failed_audit = next(audit for audit in audits if audit["status"] == "failed")
         assert failed_audit["errorMessage"] and failed_audit["resultSummary"] is None

@@ -83,3 +83,7 @@ git diff --check
 提交信息遵循 Conventional Commits。全部门禁通过后同步规范并归档。基础设施限制见 [infra 说明](infra/README.md)。
 
 固定开发工具链的审计告警和处置边界见 [依赖检查记录](docs/dependency-notes.md)。桌面和文档安全脚本使用临时配置，浏览器验收需要本机 Microsoft Edge。
+
+## MCP 连接
+
+官方 cls-mcp-server 在主机运行；启动与凭据细节在 P26 完成。连接管理和安全限制见 [MCP 连接说明](docs/mcp-connections.md)。

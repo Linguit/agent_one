@@ -63,7 +63,7 @@ class ToolAuditRepository:
                     chat_session_id=chat_session_id,
                     diagnostic_task_id=diagnostic_task_id,
                     tool_name=tool_name,
-                    arguments=arguments,
+                    arguments={key: "[REDACTED]" for key in arguments},
                     status="started",
                     started_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 )

@@ -25,6 +25,8 @@ from super_ai.job_api import router as job_router
 from super_ai.job_runtime import JobHandlers, JobWorker
 from super_ai.knowledge_retrieval import KnowledgeRetrieval
 from super_ai.llm_provider import create_llm_provider
+from super_ai.mcp_api import router as mcp_router
+from super_ai.mcp_provider import Discover, McpProvider, discover_real
 from super_ai.memory.config import DatabaseSettings
 from super_ai.memory.engine import create_engine, session_factory
 from super_ai.memory.sqlite.chat import ChatRepository
@@ -32,6 +34,7 @@ from super_ai.memory.sqlite.configuration import ConfigurationRepository
 from super_ai.memory.sqlite.documents import DeleteVectors, DocumentRepository
 from super_ai.memory.sqlite.index_tasks import INDEX_TASK_KIND
 from super_ai.memory.sqlite.jobs import JobRepository
+from super_ai.memory.sqlite.mcp import McpRepository
 from super_ai.memory.sqlite.tool_audits import ToolAuditRepository
 from super_ai.project_config import JsonObject, load_project_config
 from super_ai.session_memory import MemoryFailure, SessionMemory
@@ -69,6 +72,7 @@ def create_app(
     job_handlers: JobHandlers | None = None,
     delete_document_vectors: DeleteVectors | None = None,
     chat_model_factory: ChatModelFactory | None = None,
+    mcp_discover: Discover = discover_real,
 ) -> FastAPI:
     if config is not None and config_dir is not None:
         raise ValueError("config 与 config_dir 不能同时指定")
@@ -100,6 +104,8 @@ def create_app(
             app.state.tool_audits = audits
             configuration = ConfigurationRepository(factory)
             app.state.chat_configuration = configuration
+            mcp_provider = McpProvider(McpRepository(factory), project_config, mcp_discover)
+            app.state.mcp_provider = mcp_provider
             memory = SessionMemory(
                 chat, configuration, chat_model_factory or open_chat_model, project_config
             )
@@ -121,6 +127,7 @@ def create_app(
                 audits,
                 configuration,
                 memory,
+                mcp_provider,
             )
             handlers = JobHandlers()
             if job_handlers is not None:
@@ -142,6 +149,7 @@ def create_app(
     app.state.project_config = project_config
     app.include_router(job_router)
     app.include_router(chat_router)
+    app.include_router(mcp_router)
     app.include_router(configuration_router)
     app.include_router(document_router)
     app.include_router(index_router)

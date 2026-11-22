@@ -6,6 +6,7 @@ import WorkspaceLayout from './WorkspaceLayout.vue'
 import WorkspacePlaceholder from './WorkspacePlaceholder.vue'
 import AuthView from './AuthView.vue'
 import KnowledgeIndexView from './KnowledgeIndexView.vue'
+import McpView from './McpView.vue'
 
 export function createAppRouter(pinia: Pinia, history: RouterHistory) {
   const auth = useAuthStore(pinia)
@@ -17,7 +18,8 @@ export function createAppRouter(pinia: Pinia, history: RouterHistory) {
       {
         path: '/', component: WorkspaceLayout, meta: { requiresAuth: true }, redirect: '/chat',
         children: workspaceRoutes.map(({ path, name }) => ({
-          path, name, component: name === 'knowledge' ? KnowledgeIndexView : WorkspacePlaceholder,
+          path, name, component: name === 'knowledge' ? KnowledgeIndexView
+            : name === 'mcp' ? McpView : WorkspacePlaceholder,
         })),
       },
       { path: '/:pathMatch(.*)*', redirect: '/chat' },

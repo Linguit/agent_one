@@ -23,6 +23,11 @@ export type SseEvent =
   | SseBase<'complete', { result?: unknown }>
   | SseBase<'error', { error: ApiError; meta: RequestMeta }>
 export const ERROR_CATALOG = {
+  MCP_TIMEOUT: { category: 'SYSTEM', httpStatus: 504, message: 'MCP 操作超时。' },
+  MCP_DISCOVERY_FAILED: { category: 'SYSTEM', httpStatus: 502, message: 'MCP 连接或工具发现失败。' },
+  MCP_CALL_FAILED: { category: 'SYSTEM', httpStatus: 502, message: 'MCP 工具调用失败。' },
+  MCP_CONFIG_INVALID: { category: 'SYSTEM', httpStatus: 500, message: 'MCP 回退连接配置无效。' },
+  MCP_TOOL_NAME_CONFLICT: { category: 'BUSINESS', httpStatus: 409, message: 'MCP 工具名称冲突，请调整服务器工具或禁用重复连接。' },
   CHAT_CONTEXT_LIMIT_REACHED: { category: 'BUSINESS', httpStatus: 409, message: '上下文已达到模型窗口的 95%，请手动压缩后重试。' },
   CHAT_MODEL_CAPABILITY_INVALID: { category: 'SYSTEM', httpStatus: 500, message: 'modelCapabilities 缺少所选对话模型的有效 contextWindowTokens。' },
   CHAT_MEMORY_COMPACTION_FAILED: { category: 'SYSTEM', httpStatus: 502, message: '记忆压缩失败，原有历史与记忆保持不变，请重试。' },
@@ -159,3 +164,4 @@ export type KnowledgeRetrievalCitation = {
 export type KnowledgeRetrievalToolOutput = { results: KnowledgeRetrievalCitation[] }
 export type * from './chat'
 export * from './configuration'
+export type * from './mcp'

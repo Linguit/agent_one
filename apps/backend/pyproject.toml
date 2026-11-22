@@ -23,6 +23,8 @@ dependencies = [
   "langchain>=1,<2",
   "langgraph>=1,<2",
   "pyyaml>=6,<7",
+  "langchain-mcp-adapters>=0.2,<0.3",
+  "mcp>=1.26,<2",
 ]
 
 [dependency-groups]
