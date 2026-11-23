@@ -40,7 +40,7 @@ test('真实配置、凭据和生成文件被忽略，模板不被忽略', () =>
     assert.equal(spawnSync('git', ['check-ignore', '--no-index', path], { cwd: root }).status, 1)
     const check = (value) => {
       for (const [key, item] of Object.entries(value)) {
-        if (/key|secret|password/i.test(key)) assert.equal(item, '', `${path}:${key}`)
+        if (/key|secret|password/i.test(key)) assert.ok(item === '', `${path}:${key} 必须为空`)
         if (item !== null && typeof item === 'object') check(item)
       }
     }

@@ -146,6 +146,7 @@ async def test_tool_parallel_rerank_and_evidence() -> None:
                 "bm25Rank": None,
                 "bm25Score": None,
                 "rrfScore": 1 / 61,
+                "rrfRank": 2,
                 "rerankRank": 1,
                 "rerankScore": -0.1,
                 "score": -0.1,

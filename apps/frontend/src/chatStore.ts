@@ -1,13 +1,15 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import type { ChatAppend, ChatDetail, ChatList, ChatStreamInput, MemoryMode, SseEvent } from '@super-ai/api-contracts'
 import { useAuthStore } from './auth'
 import { createChatClient } from './chatClient'
 import { ApiRequestError } from './transport'
+import type { ToolCallAudit } from '@super-ai/api-contracts'
 
 interface LiveTurn {
   sessionId: string
   content: string
+  input: string
   reasoning: string
   references: Extract<SseEvent, { type: 'reference.source' }>['data'][]
   tools: Extract<SseEvent, { type: 'tool.call' }>['data'][]
@@ -17,8 +19,13 @@ export const useChatStore = defineStore('chat', () => {
   const auth = useAuthStore()
   const client = createChatClient(auth)
   const sessions = ref<ChatList>([])
-  const detail = ref<ChatDetail | null>(null)
+  const detail = shallowRef<ChatDetail | null>(null)
   const liveTurn = ref<LiveTurn | null>(null)
+  const toolAudits = shallowRef<ToolCallAudit[]>([])
+  const active = computed(() => detail.value?.session ?? null)
+  const messages = computed(() => detail.value?.messages ?? [])
+  const references = computed(() => liveTurn.value?.references ?? [])
+  const liveToolCalls = computed(() => liveTurn.value?.tools ?? [])
   let abort: AbortController | undefined
   let generation = 0
   let pending = Promise.resolve()
@@ -29,6 +36,7 @@ export const useChatStore = defineStore('chat', () => {
     sessions.value = []
     detail.value = null
     liveTurn.value = null
+    toolAudits.value = []
     abort?.abort()
     abort = undefined
   }, { flush: 'sync' })
@@ -62,7 +70,11 @@ export const useChatStore = defineStore('chat', () => {
   function select(id: string) {
     return enqueue(async current => {
       const selected = await client.detail(id)
-      if (current()) detail.value = selected
+      if (!current()) return
+      detail.value = selected
+      toolAudits.value = []
+      const audits = await client.toolCallAudits(id)
+      if (current()) toolAudits.value = audits
     })
   }
 
@@ -70,6 +82,7 @@ export const useChatStore = defineStore('chat', () => {
     return enqueue(async current => {
       const session = await client.create()
       await reconcile(session.id, current)
+      if (current()) toolAudits.value = []
     })
   }
 
@@ -84,16 +97,27 @@ export const useChatStore = defineStore('chat', () => {
     return enqueue(async current => {
       const controller = new AbortController()
       abort = controller
-      liveTurn.value = { sessionId: id, content: '', reasoning: '', references: [], tools: [] }
+      liveTurn.value = { sessionId: id, input: body.content, content: '', reasoning: '', references: [], tools: [] }
       try {
         for await (const event of client.stream(id, body, controller.signal)) {
-          const turn = liveTurn.value
+          const turn: LiveTurn | null = liveTurn.value
           if (!current() || !turn) return
           switch (event.type) {
-            case 'content.delta': turn.content += event.data.text; break
+            case 'content.delta':
+              for (const character of event.data.text) {
+                if (!current() || controller.signal.aborted) return
+                turn.content += character
+                await new Promise(resolve => setTimeout(resolve, 28))
+              }
+              break
             case 'reasoning.delta': turn.reasoning += event.data.text; break
             case 'reference.source': turn.references.push(event.data); break
-            case 'tool.call': turn.tools.push(event.data); break
+            case 'tool.call': {
+              const previous = turn.tools.findIndex(tool => tool.toolId === event.data.toolId)
+              if (previous < 0) turn.tools.push(event.data)
+              else turn.tools[previous] = { ...turn.tools[previous], ...event.data }
+              break
+            }
             case 'error': throw new ApiRequestError(event.data.error.httpStatus, event.data.error)
             case 'complete': return
           }
@@ -103,6 +127,8 @@ export const useChatStore = defineStore('chat', () => {
         if (current()) {
           try {
             await reconcile(id, current)
+            const audits = await client.toolCallAudits(id)
+            if (current()) toolAudits.value = audits
           } finally {
             if (current()) {
               liveTurn.value = null
@@ -125,6 +151,7 @@ export const useChatStore = defineStore('chat', () => {
     return enqueue(async current => {
       await client.remove(id)
       await reconcile(detail.value?.session.id, current)
+      if (current() && !detail.value) toolAudits.value = []
     })
   }
 
@@ -142,6 +169,6 @@ export const useChatStore = defineStore('chat', () => {
     })
   }
 
-  return { sessions, detail, liveTurn, refresh, select, create, append, send, clear, remove,
+  return { sessions, detail, active, messages, references, liveToolCalls, toolAudits, liveTurn, refresh, select, create, append, send, clear, remove,
     updateMemory, compactMemory }
 })

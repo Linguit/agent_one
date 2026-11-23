@@ -266,6 +266,7 @@ class KnowledgeRetrieval:
                         "excerpt": chunk.excerpt,
                         "metadata": chunk.metadata,
                         **evidence[key],
+                        "rrfRank": hit.index + 1,
                         "rerankRank": i,
                         "rerankScore": hit.relevance_score,
                         "score": hit.relevance_score,

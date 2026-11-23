@@ -41,9 +41,21 @@ ToolHandler = Callable[["ToolCallRequest"], Awaitable["ToolMessage | Command[Any
 
 
 class Citation(BaseModel):
+    chunkId: str
     source: str
     knowledgeBaseId: str
     documentId: str
+    excerpt: str
+    metadata: dict[str, JsonValue]
+    vectorRank: int | None
+    vectorScore: float | None
+    bm25Rank: int | None
+    bm25Score: float | None
+    rrfRank: int | None = None
+    rrfScore: float
+    rerankRank: int
+    rerankScore: float
+    score: float
 
 
 class RetrievalResult(BaseModel):
@@ -225,9 +237,11 @@ class ChatAgent:
                 kb = quote(source.knowledgeBaseId, safe="")
                 document = quote(source.documentId, safe="")
                 uri = f"/knowledge-bases/{kb}/documents/{document}"
-                if uri not in references:
-                    reference: EventData = {"title": source.source, "uri": uri}
-                    references[uri] = reference
+                if source.chunkId not in references:
+                    reference: EventData = {
+                        **source.model_dump(mode="json"), "title": source.source, "uri": uri
+                    }
+                    references[source.chunkId] = reference
                     emit("reference.source", reference)
             return result
 

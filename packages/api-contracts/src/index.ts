@@ -17,7 +17,7 @@ export type SseEvent =
   | SseBase<'content.delta', { text: string }>
   | SseBase<'reasoning.delta', { text: string }>
   | SseBase<'tool.call', { toolId: string; status: ToolStatus; toolName?: string; delta?: unknown }>
-  | SseBase<'reference.source', { title: string; uri: string }>
+  | SseBase<'reference.source', ChatReference>
   | SseBase<'task.status', { status: string }>
   | SseBase<'report', { content: unknown }>
   | SseBase<'complete', { result?: unknown }>
@@ -156,12 +156,14 @@ export type KnowledgeRetrievalCitation = {
   bm25Rank: number | null
   bm25Score: number | null
   rrfScore: number
+  rrfRank?: number | null
   rerankRank: number
   rerankScore: number
   score: number
 }
 
 export type KnowledgeRetrievalToolOutput = { results: KnowledgeRetrievalCitation[] }
+export type ChatReference = { title: string; uri: string } & Partial<KnowledgeRetrievalCitation>
 export type * from './chat'
 export * from './configuration'
 export type * from './mcp'

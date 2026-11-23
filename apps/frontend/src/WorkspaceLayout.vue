@@ -9,6 +9,7 @@ import { useFeedback } from './feedback'
 import { apiClient } from './transport'
 import { workspaceRoutes } from './workspaceRoutes'
 import AsyncStatusBadge from './components/AsyncStatusBadge.vue'
+import ChatSessions from './components/ChatSessions.vue'
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -55,7 +56,7 @@ async function logout() {
       </nav>
       <section v-if="route.name === 'chat'" class="sessions" aria-label="会话">
         <h2>会话</h2>
-        <slot name="sessions"><p>会话列表待接入</p></slot>
+        <ChatSessions />
       </section>
       <div class="account">
         <div class="account-email"><UserRound aria-hidden="true" /> <span>{{ auth.user?.email }}</span></div>

@@ -188,8 +188,13 @@ async def test_agent_chat_stream(
         assert params.query == secret_query
         return {
             "results": [
-                {"source": "资料.md", "knowledgeBaseId": "kb", "documentId": "doc"},
-                {"source": "资料.md", "knowledgeBaseId": "kb", "documentId": "doc"},
+                {
+                    "chunkId": "chunk", "source": "资料.md", "knowledgeBaseId": "kb",
+                    "documentId": "doc", "excerpt": "检索证据", "metadata": {"page": 3},
+                    "vectorRank": None, "vectorScore": None, "bm25Rank": 1, "bm25Score": 2.0,
+                    "rrfRank": 1, "rrfScore": 1 / 61, "rerankRank": 1,
+                    "rerankScore": 0.9, "score": 0.9,
+                },
             ]
         }
 
@@ -316,6 +321,10 @@ async def test_agent_chat_stream(
             "complete",
         ]
         assert first[0]["data"] == {"text": "模型返回的推理😀"}
+        assert first[3]["data"]["excerpt"] == "检索证据"
+        assert first[3]["data"]["metadata"] == {"page": 3}
+        assert first[3]["data"]["vectorRank"] is None
+        assert first[3]["data"]["rrfRank"] == 1
         assert [item["data"]["status"] for item in first[1:3]] == ["started", "completed"]
         tool_id = first[1]["data"]["toolId"]
         assert first[2]["data"]["toolId"] == tool_id

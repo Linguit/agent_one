@@ -26,3 +26,5 @@ Compose 最终只运行 etcd、MinIO、Milvus、Attu、Alertmanager；前后端�
 P16 的用户 Prompt、配置 API 与渐进 Skill 使用方式见 [Prompt 与渐进 Skill](guide/progressive-skills.md)。
 
 P17 的三种策略、预算防护及管理 API 见 [会话记忆模式](guide/session-memory.md)。
+
+P19 的最终桌面聊天、配置、引用与真实验收方式见 [聊天工作区](guide/chat-workspace.md)。

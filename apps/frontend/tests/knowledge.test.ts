@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAuthStore } from '../src/auth'
 import KnowledgeIndexView from '../src/KnowledgeIndexView.vue'
 import { useKnowledgeStore } from '../src/knowledgeStore'
+vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }) }))
 
 const doc = {
   id: 'doc', knowledgeBaseId: 'kb', filename: 'sample.md', size: 8,

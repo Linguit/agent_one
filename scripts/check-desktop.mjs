@@ -26,6 +26,14 @@ try {
   let uploaded = false
   let indexTask = false
   let mcpConnections = []
+  let chatCreated = false
+  const chatSession = { id: 'desktop-chat', title: '桌面长会话', createdAt: '', updatedAt: '',
+    memoryMode: 'manual', memorySummary: '', contextTokens: 1234, contextWindowTokens: 100000,
+    contextUsagePercent: 1.234, compactedMessageCount: 0, lastCompactedAt: null, canCompact: true }
+  const chatMessages = Array.from({ length: 12 }, (_, index) => ({ id: `message-${index}`,
+    sessionId: chatSession.id, sequence: index + 1, role: index % 2 ? 'assistant' : 'user',
+    content: '长会话正文\n\n' + '这是用于检查局部滚动与输入区固定位置的正文。'.repeat(30),
+    createdAt: '', metadata: { references: [], toolCallIds: [] } }))
   const document = { id: 'desktop-document', filename: 'desktop.md', indexStatus: 'pending' }
   await page.route('**/api/**', async route => {
     const request = route.request()
@@ -51,6 +59,16 @@ try {
       return route.fulfill({ json: { ok: true, data: { loggedOut: true } } })
     }
     if (path === '/api/health') return route.fulfill({ json: { ok: true, data: { status: 'ok' } } })
+    if (path === '/api/chat/sessions' && validSession) {
+      if (request.method() === 'POST') chatCreated = true
+      return route.fulfill({ json: { ok: true, data: request.method() === 'POST' ? chatSession : chatCreated ? [chatSession] : [] } })
+    }
+    if (path === '/api/chat/sessions/desktop-chat' && validSession) return route.fulfill({ json: { ok: true,
+      data: { session: chatSession, messages: chatMessages } } })
+    if (path.endsWith('/tool-call-audits') && validSession) return route.fulfill({ json: { ok: true, data: [] } })
+    if (path === '/api/chat/configuration' && validSession) return route.fulfill({ json: { ok: true, data: {
+      prompts: [], skills: [], selectedPromptId: null, selectedSkillIds: [],
+    } } })
     // Browser-only API fixture; this is not a real MCP smoke test.
     if (path.startsWith('/api/mcp/connections') && validSession) {
       const method = request.method()
@@ -111,7 +129,30 @@ try {
     await nav.getByRole('link', { name: title, exact: true }).click()
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(title)
     await expect(page.getByRole('region', { name: '会话' })).toHaveCount(title === '对话' ? 1 : 0)
-    if (!['知识库', 'MCP'].includes(title)) await expect(page.getByText('功能待接入')).toBeVisible()
+    if (title === 'AIOps') await expect(page.getByText('功能待接入')).toBeVisible()
+    if (title === '对话') {
+      await expect(page.getByRole('log', { name: '聊天消息' })).toBeEmpty()
+      await expect(page.getByRole('button', { name: '＋ 新建会话' })).toBeVisible()
+      await expect(page.getByLabel('消息', { exact: true })).toHaveCSS('resize', 'none')
+      const composer = await page.getByRole('form', { name: '发送消息' }).boundingBox()
+      assert.ok(composer && composer.y + composer.height <= 900)
+      assert.ok(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight))
+      await page.screenshot({ path: join(repositoryRoot, '.cache/desktop-chat.png') })
+      await page.getByRole('button', { name: '＋ 新建会话' }).click()
+      await expect(page.getByLabel('记忆模式')).toBeVisible()
+      const filledComposer = await page.getByRole('form', { name: '发送消息' }).boundingBox()
+      assert.ok(filledComposer && filledComposer.y + filledComposer.height <= 900)
+      assert.ok(await page.getByRole('log').evaluate(element => element.scrollHeight > element.clientHeight))
+      assert.ok(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight))
+      await page.reload()
+      await expect(page.getByRole('log').locator('.chat-message')).toHaveCount(12)
+      await nav.getByRole('link', { name: '知识库', exact: true }).click()
+      await nav.getByRole('link', { name: '对话', exact: true }).click()
+      await expect(page).toHaveURL(/\/chat\?session=desktop-chat$/)
+      await page.reload()
+      await expect(page.getByRole('log').locator('.chat-message')).toHaveCount(12)
+      await page.screenshot({ path: join(repositoryRoot, '.cache/desktop-chat-long.png') })
+    }
   }
   await nav.getByRole('link', { name: 'MCP', exact: true }).click()
   await page.getByLabel('名称', { exact: true }).fill('桌面 CLS 测试连接')

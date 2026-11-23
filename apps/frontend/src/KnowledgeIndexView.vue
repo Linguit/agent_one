@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { DOCUMENT_CHUNKING_DEFAULTS } from '@super-ai/api-contracts'
 import type { ChunkingConfig, DocumentIndexStatus } from '@super-ai/api-contracts'
 import { uploadIssue } from './knowledgeIndex'
 import { activeIndex, useKnowledgeStore } from './knowledgeStore'
 
 const store = useKnowledgeStore()
+const route = useRoute()
 const file = ref<File>()
 const input = ref<HTMLInputElement>()
 const strategy = ref<ChunkingConfig['strategy']>('fixed-character')
@@ -38,7 +40,11 @@ async function confirmOverwrite() {
   if (!store.error && !store.overwrite) clearFile()
 }
 
-onMounted(() => { void store.load() })
+onMounted(async () => {
+  await store.load()
+  if (typeof route.query.kb === 'string') await store.choose(route.query.kb)
+  if (typeof route.query.document === 'string') await store.inspect(route.query.document)
+})
 onUnmounted(store.reset)
 </script>
 

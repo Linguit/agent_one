@@ -148,7 +148,7 @@ it('clears prior detail and ignores an in-flight response after an account switc
   const auth = useAuthStore()
   const request = vi.spyOn(auth, 'request').mockResolvedValueOnce({
     session: original, messages: [],
-  })
+  }).mockResolvedValueOnce([])
   const store = useChatStore()
   await store.select(original.id)
   expect(store.detail?.session).toEqual(original)
@@ -161,5 +161,5 @@ it('clears prior detail and ignores an in-flight response after an account switc
   await refresh
   expect(store.detail).toBeNull()
   expect(store.sessions).toEqual([])
-  expect(request).toHaveBeenCalledTimes(2)
+  expect(request).toHaveBeenCalledTimes(3)
 })
