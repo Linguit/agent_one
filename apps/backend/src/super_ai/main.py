@@ -14,6 +14,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from super_ai.agent_chat import ChatAgent, ChatModelFactory
+from super_ai.alert_api import router as alert_router
 from super_ai.auth import AuthService, current_user, get_auth_service
 from super_ai.chat_api import router as chat_router
 from super_ai.configuration_api import router as configuration_router
@@ -147,6 +148,7 @@ def create_app(
 
     app = FastAPI(title="Super AI 基础服务", lifespan=lifespan)
     app.state.project_config = project_config
+    app.include_router(alert_router)
     app.include_router(job_router)
     app.include_router(chat_router)
     app.include_router(mcp_router)
@@ -182,7 +184,13 @@ def create_app(
         code = (
             "AUTH_INVALID_CREDENTIALS"
             if exc.detail == "AUTH_INVALID_CREDENTIALS"
-            else ("AUTH_UNAUTHORIZED" if exc.status_code == 401 else "BUSINESS_NOT_FOUND")
+            else (
+                "AUTH_UNAUTHORIZED"
+                if exc.status_code == 401
+                else "AUTH_FORBIDDEN"
+                if exc.status_code == 403
+                else "BUSINESS_NOT_FOUND"
+            )
         )
         return failure(code, request)
 

@@ -27,3 +27,5 @@ apps/backend/var/
 *.sqlite3-*
 *.log
 *.log.*
+
+/scripts/.cls-venv/

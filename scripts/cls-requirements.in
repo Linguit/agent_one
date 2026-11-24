@@ -1,0 +1,2 @@
+# 独立 CLS 环境；与 backend 的 pymilvus/protobuf 不兼容，禁止合并环境。
+tencentcloud-cls-sdk-python==1.0.9

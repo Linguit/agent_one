@@ -23,6 +23,7 @@ export type SseEvent =
   | SseBase<'complete', { result?: unknown }>
   | SseBase<'error', { error: ApiError; meta: RequestMeta }>
 export const ERROR_CATALOG = {
+  AIOPS_ALERTS_UNAVAILABLE: { category: 'SYSTEM', httpStatus: 503, message: '告警源暂时不可用。' },
   MCP_TIMEOUT: { category: 'SYSTEM', httpStatus: 504, message: 'MCP 操作超时。' },
   MCP_DISCOVERY_FAILED: { category: 'SYSTEM', httpStatus: 502, message: 'MCP 连接或工具发现失败。' },
   MCP_CALL_FAILED: { category: 'SYSTEM', httpStatus: 502, message: 'MCP 工具调用失败。' },
@@ -167,3 +168,17 @@ export type ChatReference = { title: string; uri: string } & Partial<KnowledgeRe
 export type * from './chat'
 export * from './configuration'
 export type * from './mcp'
+
+export type ActiveAlert = {
+  alertname: string
+  service: string | null
+  severity: string | null
+  status: 'pending' | 'firing' | 'active' | 'suppressed' | 'unprocessed'
+  startsAt: string
+  labels: Record<string, string>
+  annotations: Record<string, string>
+  source: string
+  raw: Record<string, unknown>
+}
+export type ActiveAlertsResponse = ApiEnvelope<{ items: ActiveAlert[] }>
+export const ACTIVE_ALERTS_PATH = '/aiops/alerts/active' as const

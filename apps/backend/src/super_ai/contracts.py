@@ -32,6 +32,7 @@ class FailureEnvelope(BaseModel):
 
 
 ERROR_CATALOG: dict[str, tuple[Literal["AUTH", "BUSINESS", "VALIDATION", "SYSTEM"], int, str]] = {
+    "AIOPS_ALERTS_UNAVAILABLE": ("SYSTEM", 503, "告警源暂时不可用。"),
     "MCP_TIMEOUT": ("SYSTEM", 504, "MCP 操作超时。"),
     "MCP_DISCOVERY_FAILED": ("SYSTEM", 502, "MCP 连接或工具发现失败。"),
     "MCP_CALL_FAILED": ("SYSTEM", 502, "MCP 工具调用失败。"),

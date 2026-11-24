@@ -20,8 +20,8 @@
   "mcp": { "url": "", "secret": "" },
   "minio": { "endpoint": "", "accessKey": "", "secretKey": "" },
   "clsMcpServer": { "url": "" },
-  "prometheusAlerts": { "url": "" },
-  "clsLogUpload": { "endpoint": "", "topicId": "" },
+  "prometheusAlerts": { "sources": [] },
+  "clsLogUpload": { "endpoint": "", "region": "", "logsetId": "", "topicId": "" },
   "aiopsDemo": {
     "backendBaseUrl": "http://127.0.0.1:8000",
     "email": "",
