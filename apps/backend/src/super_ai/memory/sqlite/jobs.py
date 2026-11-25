@@ -57,6 +57,10 @@ async def _event(
     )
 
 
+append_persisted_event = _event
+job_utc_now = _utc_now
+
+
 class JobRepository:
     def __init__(self, factory: async_sessionmaker[AsyncSession]) -> None:
         self.factory = factory
@@ -155,6 +159,17 @@ class JobRepository:
             row = result.mappings().one_or_none()
             if row is not None:
                 kind = "cancelled" if row["status"] == "cancelled" else "cancel_requested"
+                if row["resource_type"] == "diagnostic_task" and kind == "cancelled":
+                    await _event(
+                        session,
+                        job_id,
+                        "task.status",
+                        now,
+                        {
+                            "status": "cancelled",
+                            "task": {"message": "诊断已取消。", "progress": 1},
+                        },
+                    )
                 await _event(session, job_id, kind, now, {})
                 return row
             return (await session.execute(select(jobs).where(*scoped))).mappings().one_or_none()
@@ -304,6 +319,20 @@ class JobRepository:
             row = result.mappings().one_or_none()
             if row is not None:
                 kind = "retry_scheduled" if row["status"] == "queued" else row["status"]
+                if row["resource_type"] == "diagnostic_task":
+                    await _event(
+                        session,
+                        row["id"],
+                        "task.status",
+                        now,
+                        {
+                            "status": row["status"],
+                            "task": {
+                                "message": "诊断后台任务状态：" + row["status"],
+                                "progress": 1 if row["status"] != "queued" else 0,
+                            },
+                        },
+                    )
                 await _event(session, row["id"], kind, now, {"attempt": row["attempt"]})
 
     async def recover_expired(self) -> None:

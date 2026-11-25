@@ -115,10 +115,10 @@ class McpProvider:
             tools, error = [], exc.code
         return await self.repository.checked(scope, record, tools, error)
 
-    async def tools(self, scope: OwnerScope) -> list["BaseTool"]:
+    async def tools(self, scope: OwnerScope, *, allow_fallback: bool = True) -> list["BaseTool"]:
         records = await self.repository.list(scope)
         sources: list[ConnectionInput] = [row for row in records if row.enabled]
-        if not records:
+        if not records and allow_fallback:
             fallback = self._config.get("clsMcpServer")
             if isinstance(fallback, dict) and fallback.get("url"):
                 try:

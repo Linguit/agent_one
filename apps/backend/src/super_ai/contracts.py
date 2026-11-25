@@ -32,6 +32,10 @@ class FailureEnvelope(BaseModel):
 
 
 ERROR_CATALOG: dict[str, tuple[Literal["AUTH", "BUSINESS", "VALIDATION", "SYSTEM"], int, str]] = {
+    "SYSTEM_UNAVAILABLE": ("SYSTEM", 503, "当前用户没有可用的真实 SearchLog 工具。"),
+    "DIAGNOSTIC_EXECUTION_FAILED": ("SYSTEM", 502, "诊断执行失败，请检查工具和证据链。"),
+    "DIAGNOSTIC_INVALID_PLAN": ("SYSTEM", 502, "诊断计划未通过真实工具约束校验。"),
+    "DIAGNOSTIC_KNOWLEDGE_FAILED": ("SYSTEM", 502, "诊断 SOP 检索失败。"),
     "AIOPS_ALERTS_UNAVAILABLE": ("SYSTEM", 503, "告警源暂时不可用。"),
     "MCP_TIMEOUT": ("SYSTEM", 504, "MCP 操作超时。"),
     "MCP_DISCOVERY_FAILED": ("SYSTEM", 502, "MCP 连接或工具发现失败。"),

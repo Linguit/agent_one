@@ -18,11 +18,15 @@ export type SseEvent =
   | SseBase<'reasoning.delta', { text: string }>
   | SseBase<'tool.call', { toolId: string; status: ToolStatus; toolName?: string; delta?: unknown }>
   | SseBase<'reference.source', ChatReference>
-  | SseBase<'task.status', { status: string }>
+  | SseBase<'task.status', { status: BackgroundJobStatus; task: { message: string; progress: number } }>
   | SseBase<'report', { content: unknown }>
   | SseBase<'complete', { result?: unknown }>
   | SseBase<'error', { error: ApiError; meta: RequestMeta }>
 export const ERROR_CATALOG = {
+  SYSTEM_UNAVAILABLE: { category: 'SYSTEM', httpStatus: 503, message: '当前用户没有可用的真实 SearchLog 工具。' },
+  DIAGNOSTIC_EXECUTION_FAILED: { category: 'SYSTEM', httpStatus: 502, message: '诊断执行失败，请检查工具和证据链。' },
+  DIAGNOSTIC_INVALID_PLAN: { category: 'SYSTEM', httpStatus: 502, message: '诊断计划未通过真实工具约束校验。' },
+  DIAGNOSTIC_KNOWLEDGE_FAILED: { category: 'SYSTEM', httpStatus: 502, message: '诊断 SOP 检索失败。' },
   AIOPS_ALERTS_UNAVAILABLE: { category: 'SYSTEM', httpStatus: 503, message: '告警源暂时不可用。' },
   MCP_TIMEOUT: { category: 'SYSTEM', httpStatus: 504, message: 'MCP 操作超时。' },
   MCP_DISCOVERY_FAILED: { category: 'SYSTEM', httpStatus: 502, message: 'MCP 连接或工具发现失败。' },
@@ -164,10 +168,11 @@ export type KnowledgeRetrievalCitation = {
 }
 
 export type KnowledgeRetrievalToolOutput = { results: KnowledgeRetrievalCitation[] }
-export type ChatReference = { title: string; uri: string } & Partial<KnowledgeRetrievalCitation>
+export type ChatReference = { title: string; uri: string; evidenceId?: string; kind?: string } & Partial<KnowledgeRetrievalCitation>
 export type * from './chat'
 export * from './configuration'
 export type * from './mcp'
+export * from './diagnostics'
 
 export type ActiveAlert = {
   alertname: string
