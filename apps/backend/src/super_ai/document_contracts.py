@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Generic, Literal, TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, JsonValue
 
 from super_ai.contracts import Meta
 
@@ -46,6 +46,7 @@ class KnowledgeDocument(BaseModel):
     uploadedAt: datetime
     indexStatus: IndexStatus
     chunking: ChunkingConfig
+    metadata: dict[str, JsonValue] = Field(default_factory=lambda: {})
 
 
 class ChunkExcerpt(BaseModel):

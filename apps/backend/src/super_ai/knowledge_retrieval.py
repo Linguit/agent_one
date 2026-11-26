@@ -122,6 +122,7 @@ def build_corpus(rows: list[RowMapping]) -> dict[str, Chunk]:
                 str(row["filename"]),
                 part.text,
                 {
+                    **cast(JsonObject, row.get("metadata", {})),
                     "chunking": cast(JsonObject, config.model_dump(mode="json")),
                     "index": part.index,
                     "start": part.start,

@@ -54,6 +54,7 @@ def _document(row: RowMapping) -> KnowledgeDocument:
             "uploadedAt": row["uploaded_at"].replace(tzinfo=timezone.utc),
             "indexStatus": row["index_status"],
             "chunking": row["chunking"],
+            "metadata": row.get("metadata", {}),
         }
     )
 

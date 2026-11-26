@@ -96,6 +96,7 @@ class DocumentIndexer:
                 source=str(row["filename"]),
                 created_at=created_at,
                 metadata={
+                    **cast(JsonObject, row.get("metadata", {})),
                     "chunking": config_metadata,
                     "index": chunk.index,
                     "start": chunk.start,

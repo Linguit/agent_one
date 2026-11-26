@@ -86,7 +86,9 @@ def safe_secrets(config: JsonObject) -> tuple[str, ...]:
 
 #检查模型生成的诊断计划是否符合要求
 def validate_plan(plan: Plan, registry: dict[str, BaseTool]) -> Plan:
-    if sum(is_search_log(step.tool) for step in plan.steps) != 1: #必须恰好有一个日志查询步骤 is_search_log() 判断步骤使用的工具是否属于 SearchLog 类。
+    # 必须恰好有一个日志查询步骤。
+    # is_search_log() 判断步骤使用的工具是否属于 SearchLog 类。
+    if sum(is_search_log(step.tool) for step in plan.steps) != 1:
         raise DiagnosticFailure("DIAGNOSTIC_INVALID_PLAN")
     for step in plan.steps:
         tool = registry.get(step.tool) #每一步使用的工具必须已注册
@@ -149,7 +151,10 @@ class DiagnosticRunner:
     ) -> None:
         state["next"] = next_node
         await self.repo.save(context, state, next_node)
-    #是诊断流程中统一执行工具的方法。它除了调用工具，还负责记录审计、更新步骤状态、整理并保存证据、发送过程事件，最后返回是否成功 在planner中是先找SOP(标准操作程序)帮助模型制定计划 在executor中按计划查询日志和指标
+    # 是诊断流程中统一执行工具的方法。除了调用工具，还负责记录审计、更新步骤状态、
+    # 整理并保存证据、发送过程事件，最后返回是否成功。
+    # 在 planner 中先找 SOP（标准操作程序）帮助模型制定计划；
+    # 在 executor 中按计划查询日志和指标。
     async def invoke(
         self,
         context: JobContext,
@@ -272,7 +277,8 @@ class DiagnosticRunner:
                     }
                 )
             return registry
-        #负责收集诊断所需的初始信息，并生成、校验和保存第一版诊断计划，为后面的 executor 执行做准备。 读取问题 → 检索知识 → 发现工具 → 收集告警
+        # 负责收集诊断所需的初始信息，并生成、校验和保存第一版诊断计划，
+        # 为后面的 executor 执行做准备：读取问题 → 检索知识 → 发现工具 → 收集告警。
     # → 模型制定计划 → 校验并排序 → 保存计划 → executor
         async def planner(graph: GraphState) -> GraphState:
             state = graph["data"]
@@ -369,7 +375,8 @@ class DiagnosticRunner:
                 ),
                 registered,
             )
-            # Attempt the single required SearchLog before optional reads / early report. 把日志查询步骤排到计划最前面，其他步骤保持原来的相对顺序。
+            # Attempt the single required SearchLog before optional reads / early report.
+            # 把日志查询步骤排到计划最前面，其他步骤保持原来的相对顺序。
             plan.steps.sort(key=lambda item: not is_search_log(item.tool))
             plan = Plan.model_validate(self.clean(plan))
             state.update(

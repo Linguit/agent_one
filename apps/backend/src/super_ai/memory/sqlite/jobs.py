@@ -1,3 +1,4 @@
+from collections.abc import Awaitable, Callable
 from contextlib import nullcontext
 from datetime import datetime, timedelta
 from typing import Literal
@@ -15,6 +16,7 @@ from super_ai.project_config import JsonObject
 from super_ai.tenant import require_owner_user_id
 
 JobOutcome = Literal["succeeded", "handler_error", "timeout", "lease_expired"]
+SuccessHook = Callable[[AsyncSession, RowMapping], Awaitable[None]]
 ERRORS: dict[JobOutcome, str] = {
     "handler_error": "任务执行失败。",
     "timeout": "任务执行超时。",
@@ -64,6 +66,7 @@ job_utc_now = _utc_now
 class JobRepository:
     def __init__(self, factory: async_sessionmaker[AsyncSession]) -> None:
         self.factory = factory
+        self.success_hooks: dict[str, SuccessHook] = {}
 
     async def enqueue(
         self,
@@ -319,6 +322,9 @@ class JobRepository:
             row = result.mappings().one_or_none()
             if row is not None:
                 kind = "retry_scheduled" if row["status"] == "queued" else row["status"]
+                hook = self.success_hooks.get(str(row["kind"]))
+                if row["status"] == "succeeded" and hook is not None:
+                    await hook(session, row)
                 if row["resource_type"] == "diagnostic_task":
                     await _event(
                         session,

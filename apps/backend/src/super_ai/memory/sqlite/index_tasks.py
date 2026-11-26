@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -39,10 +40,19 @@ class IndexTasks:
         self.jobs = repository
 
     async def create(
-        self, scope: OwnerScope, kb: str, document: str, retry_of: str | None = None
+        self,
+        scope: OwnerScope,
+        kb: str,
+        document: str,
+        retry_of: str | None = None,
+        *,
+        transaction: AsyncSession | None = None,
     ) -> RowMapping | None:
-        async with self.jobs.factory.begin() as session:
-            await session.execute(text("BEGIN IMMEDIATE"))
+        async with (
+            self.jobs.factory.begin() if transaction is None else nullcontext(transaction)
+        ) as session:
+            if transaction is None:
+                await session.execute(text("BEGIN IMMEDIATE"))
             scoped_document = (
                 documents.c.id == document,
                 documents.c.owner_user_id == scope.owner_user_id,

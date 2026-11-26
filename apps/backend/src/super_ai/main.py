@@ -20,7 +20,9 @@ from super_ai.auth import AuthService, current_user, get_auth_service
 from super_ai.chat_api import router as chat_router
 from super_ai.configuration_api import router as configuration_router
 from super_ai.contracts import failure, success
+from super_ai.diagnosis_case_persistor import DiagnosisCasePersistor
 from super_ai.diagnostic_api import router as diagnostic_router
+from super_ai.diagnostic_case_api import router as diagnostic_case_router
 from super_ai.diagnostic_contracts import DIAGNOSTIC_KIND
 from super_ai.diagnostic_runtime import DiagnosticRunner, safe_secrets
 from super_ai.document_api import router as document_router
@@ -36,6 +38,7 @@ from super_ai.memory.config import DatabaseSettings
 from super_ai.memory.engine import create_engine, session_factory
 from super_ai.memory.sqlite.chat import ChatRepository
 from super_ai.memory.sqlite.configuration import ConfigurationRepository
+from super_ai.memory.sqlite.diagnostic_cases import DiagnosticCaseRepository
 from super_ai.memory.sqlite.diagnostics import Diagnostics
 from super_ai.memory.sqlite.documents import DeleteVectors, DocumentRepository
 from super_ai.memory.sqlite.index_tasks import INDEX_TASK_KIND
@@ -146,6 +149,12 @@ def create_app(
             )
             app.state.diagnostics = diagnostics
             app.state.diagnostic_runner = runner
+            persistor = DiagnosisCasePersistor(
+                repository, app.state.document_repository, safe_secrets(project_config),
+            )
+            app.state.diagnosis_case_persistor = persistor
+            app.state.diagnostic_cases = DiagnosticCaseRepository(factory)
+            repository.success_hooks[DIAGNOSTIC_KIND] = persistor.on_succeeded
             if DIAGNOSTIC_KIND not in handlers.kinds():
                 handlers.register(DIAGNOSTIC_KIND, runner.run)
             if INDEX_TASK_KIND not in handlers.kinds():
@@ -164,6 +173,7 @@ def create_app(
     app.state.project_config = project_config
     app.include_router(alert_router)
     app.include_router(diagnostic_router)
+    app.include_router(diagnostic_case_router)
     app.include_router(job_router)
     app.include_router(chat_router)
     app.include_router(mcp_router)

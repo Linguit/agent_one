@@ -105,6 +105,7 @@ export type KnowledgeDocument = {
   uploadedAt: string
   indexStatus: DocumentIndexStatus
   chunking: ChunkingConfig
+  metadata?: Record<string, unknown>
 }
 export type DocumentChunkPreview = {
   documentId: string

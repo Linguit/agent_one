@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from typing import cast
 from uuid import uuid4
@@ -24,6 +25,7 @@ from starlette.concurrency import run_in_threadpool
 
 from super_ai.document_contracts import ChunkingConfig
 from super_ai.memory.base import Base
+from super_ai.project_config import JsonObject
 from super_ai.tenant import OwnerScope
 
 documents = Table(
@@ -41,6 +43,7 @@ documents = Table(
     Column("chunking", JSON, nullable=False),
     Column("body", Text, nullable=False),
     Column("deleted_at", DateTime),
+    Column("metadata", JSON, nullable=False, server_default=text("'{}'")),
 )
 Index(
     "uq_knowledge_documents_active_hash",
@@ -100,9 +103,14 @@ class DocumentRepository:
         chunking: ChunkingConfig,
         body: str,
         overwrite: bool,
+        metadata: JsonObject | None = None,
+        transaction: AsyncSession | None = None,
     ) -> RowMapping:
-        async with self._factory.begin() as session:
-            await session.execute(text("BEGIN IMMEDIATE"))
+        async with (
+            self._factory.begin() if transaction is None else nullcontext(transaction)
+        ) as session:
+            if transaction is None:
+                await session.execute(text("BEGIN IMMEDIATE"))
             old_id = (
                 await session.execute(
                     select(documents.c.id).where(
@@ -128,6 +136,7 @@ class DocumentRepository:
                     index_status="pending",
                     chunking=chunking.model_dump(mode="json"),
                     body=body,
+                    metadata=metadata or {},
                 )
                 .returning(*[column for column in documents.c if column.name != "body"])
             )
