@@ -111,3 +111,25 @@ svg { width: 20px; height: 20px; flex: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+.workspace-canvas:has(.aiops-workspace) { overflow: hidden; }
+.aiops-workspace { height: 100%; min-height: 0; display: grid; grid-template-columns: 260px minmax(0, 1fr) 300px; grid-template-rows: minmax(0, 1fr); color: #26364b; background: #f4f6f9; font-size: 13px; }
+.aiops-column { min-width: 0; min-height: 0; overflow: auto; padding: 20px 16px; background: white; overflow-wrap: anywhere; }
+.aiops-input { border-right: 1px solid var(--border); }.aiops-provenance { border-left: 1px solid var(--border); }
+.aiops-eyebrow { color: #526b87; font-size: 11px; letter-spacing: .12em; }
+.aiops-heading h2 { font-size: 19px; margin: 8px 0; }.aiops-heading p, .aiops-muted { color: #68798c; line-height: 1.7; }
+.aiops-workspace h3 { font-size: 14px; margin: 14px 0; }.aiops-column > section { margin-top: 26px; }
+.aiops-workspace button:not(.primary-button) { padding: 7px 9px; border: 1px solid #d7dfe9; border-radius: 6px; background: white; color: #344a63; text-align: left; }
+.aiops-workspace button:hover { border-color: #7295b6; }.aiops-workspace button[aria-current=true], .aiops-workspace button[aria-pressed=true] { border-color: #287660; background: #f0f8f4; }
+.aiops-input form { display: grid; gap: 10px; margin-top: 24px; }.aiops-input textarea, .aiops-input select { width: 100%; min-width: 0; padding: 10px; border: 1px solid #c9d3df; border-radius: 7px; background: white; }
+.aiops-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }.aiops-section-heading span { font-size: 11px; color: #72613a; }
+.aiops-card { display: block; width: 100%; padding: 12px; margin: 9px 0; border: 1px solid #e0e6ed; border-radius: 8px; background: #fbfcfd; overflow-wrap: anywhere; }
+.aiops-card strong, .aiops-card span, .aiops-card small { display: block; }.aiops-card strong { font-size: 13px; line-height: 1.6; }.aiops-card small, .aiops-card span { color: #66778b; margin-top: 5px; font-size: 11px; }
+.aiops-card p { line-height: 1.7; }.aiops-workspace summary { cursor: pointer; }.aiops-workspace dd { margin: 5px 0 14px; }.aiops-workspace dt { font-weight: 600; }
+.aiops-center { display: grid; grid-template-rows: auto minmax(0, 1fr) minmax(130px, 29%); min-width: 0; min-height: 0; overflow: hidden; }
+.aiops-task-header { padding: 18px 24px; border-bottom: 1px solid var(--border); background: white; max-height: 230px; overflow: auto; overflow-wrap: anywhere; }.aiops-task-header h2 { font-size: 17px; line-height: 1.5; margin: 6px 0 10px; }
+.aiops-status-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }.aiops-status-row > span { padding: 4px 8px; background: #eef2f7; border-radius: 4px; font-size: 12px; }
+.aiops-workspace [data-status=failed], .aiops-error { color: #ab3434; }.aiops-workspace [data-status=succeeded] { color: #23765f; }
+.aiops-report, .aiops-timeline { overflow: auto; min-height: 0; min-width: 0; padding: 18px 24px; overflow-wrap: anywhere; }.aiops-report { background: white; margin: 14px; border: 1px solid #e0e6ed; border-radius: 10px; }.aiops-report .markdown { line-height: 1.85; }.aiops-report .markdown h1 { font-size: 21px; }.aiops-report .markdown h2 { font-size: 18px; }
+.aiops-timeline { border-top: 1px solid var(--border); background: #f8fafc; }.aiops-timeline ol { padding-left: 18px; }.aiops-timeline li { padding-left: 5px; border-left: 2px solid #dae4ee; }.aiops-timeline li p { margin: 5px 0 14px; }.aiops-timeline small { color: #718198; }
+@media (max-width: 1200px) { .aiops-workspace { grid-template-columns: 220px minmax(0,1fr) 250px; }.aiops-column { padding: 16px 12px; } }

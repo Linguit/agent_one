@@ -227,7 +227,7 @@ class JobRepository:
             if row is not None:
                 await _event(session, new_id, "queued", now, {})
             return row
-
+    #从队列中领取一个符合条件的任务，把它改为运行中，并返回领取后的任务信息
     async def claim(self, kinds: tuple[str, ...], lease_seconds: float) -> RowMapping | None:
         now = _utc_now()
         candidate = (
@@ -340,7 +340,7 @@ class JobRepository:
                         },
                     )
                 await _event(session, row["id"], kind, now, {"attempt": row["attempt"]})
-
+    #处理已经过期的任务租约
     async def recover_expired(self) -> None:
         async with self.factory() as session:
             expired = list(

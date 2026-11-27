@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from super_ai.alert_inputs import ActiveAlerts
+from super_ai.alert_inputs import ActiveAlerts, AlertsUnavailable
 from super_ai.diagnostic_contracts import (
     DIAGNOSTIC_KIND,
     DiagnosticInput,
@@ -536,3 +536,33 @@ def test_mcp_log_blocks_are_split_and_error_is_not_evidence() -> None:
     assert evidence_items({"logs": []}, "log") == []
     with pytest.raises(DiagnosticFailure):
         evidence_items([{"type": "text", "text": '{"isError":true}'}], "log")
+
+
+@pytest.mark.parametrize("alert_names", [[], ["test-alert"]])
+async def test_alert_source_only_required_when_selected(
+    repo: Diagnostics, monkeypatch: pytest.MonkeyPatch, alert_names: list[str]
+) -> None:
+    runner, calls = runner_for(repo, monkeypatch)
+    alert_calls: list[bool] = []
+
+    async def unavailable() -> ActiveAlerts:
+        alert_calls.append(True)
+        raise AlertsUnavailable
+
+    monkeypatch.setattr(runner, "alerts", unavailable)
+    task = await repo.create(SCOPE, DiagnosticInput(query="test", alertNames=alert_names))
+    context = await claimed(repo)
+    if alert_names:
+        with pytest.raises(DiagnosticFailure):
+            await runner.run(context)
+        assert alert_calls == [True]
+        assert "logs" not in calls
+    else:
+        await runner.run(context)
+        assert not alert_calls
+        assert calls.count("logs") == 1
+        chain = await repo.chain(SCOPE, str(task["id"]))
+        assert chain["reports"]
+        assert not any(
+            item["kind"] == "alert" for item in cast(list[JsonObject], chain["evidence"])
+        )

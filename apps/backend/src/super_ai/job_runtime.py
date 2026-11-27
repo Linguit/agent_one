@@ -9,6 +9,7 @@ from sqlalchemy.engine import RowMapping
 
 from super_ai.memory.sqlite.jobs import JobOutcome, JobRepository
 from super_ai.project_config import JsonObject
+from super_ai.safe_logging import log_failure
 from super_ai.tenant import OwnerScope
 
 logger = logging.getLogger(__name__)
@@ -90,7 +91,7 @@ class JobWorker:
     async def _slot(self) -> None:
         while True:
             try:
-                await self.repository.recover_expired()
+                await self.repository.recover_expired() #处理已经过期的任务租约
                 kinds = self.handlers.kinds()
                 job = await self.repository.claim(kinds, self.lease_seconds) if kinds else None
                 if job is not None:
@@ -103,7 +104,8 @@ class JobWorker:
     async def _invoke(self, job: RowMapping) -> JobOutcome:
         try:
             await self.handlers.get(str(job["kind"]))(JobContext(self.repository, job))
-        except Exception:
+        except Exception as exc:
+            log_failure(logger, "job_handler", exc)
             return "handler_error"
         return "succeeded"
 

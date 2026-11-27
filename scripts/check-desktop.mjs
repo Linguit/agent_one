@@ -86,6 +86,8 @@ try {
       return route.fulfill({ json: { ok: true, data: method === 'GET' ? mcpConnections
         : method === 'DELETE' ? { deleted: true } : mcpConnections[0] } })
     }
+    if (path === '/api/aiops/alerts/active' && validSession) return route.fulfill({ json: { ok: true, data: { items: [] } } })
+    if (['/api/aiops/diagnostics', '/api/aiops/diagnostic-cases'].includes(path) && validSession) return route.fulfill({ json: { ok: true, data: [] } })
     if (path === '/api/knowledge-bases' && validSession) {
       return route.fulfill({ json: { ok: true, data: [{ id: 'desktop-kb', name: '默认知识库' }] } })
     }
@@ -129,7 +131,7 @@ try {
     await nav.getByRole('link', { name: title, exact: true }).click()
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(title)
     await expect(page.getByRole('region', { name: '会话' })).toHaveCount(title === '对话' ? 1 : 0)
-    if (title === 'AIOps') await expect(page.getByText('功能待接入')).toBeVisible()
+    if (title === 'AIOps') await expect(page.getByRole('region', { name: 'AIOps 诊断控制台' })).toBeVisible()
     if (title === '对话') {
       await expect(page.getByRole('log', { name: '聊天消息' })).toBeEmpty()
       await expect(page.getByRole('button', { name: '＋ 新建会话' })).toBeVisible()

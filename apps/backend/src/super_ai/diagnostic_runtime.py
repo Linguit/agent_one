@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections.abc import Awaitable, Callable
 from time import perf_counter
@@ -25,10 +26,14 @@ from super_ai.memory.sqlite.diagnostic_schema import checkpoints, evidence, repo
 from super_ai.memory.sqlite.diagnostics import Diagnostics
 from super_ai.memory.sqlite.tool_audits import ToolAuditRepository
 from super_ai.project_config import JsonObject
+from super_ai.safe_logging import log_failure
 from super_ai.tenant import OwnerScope
 
 if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
+
+
+logger = logging.getLogger(__name__)
 
 
 class GraphState(TypedDict):
@@ -263,6 +268,7 @@ class DiagnosticRunner:
         from langgraph.graph import END, START, StateGraph  # pyright: ignore[reportMissingTypeStubs]
 
         task_id = str(context.job["resource_id"])
+        stage = "initialization"
         registry: dict[str, BaseTool] = {}
         loaded = await self.repo.load(context)
         initial: JsonObject = loaded or {"next": "planner", "version": 0, "replans": 0}
@@ -281,6 +287,8 @@ class DiagnosticRunner:
         # 为后面的 executor 执行做准备：读取问题 → 检索知识 → 发现工具 → 收集告警。
     # → 模型制定计划 → 校验并排序 → 保存计划 → executor
         async def planner(graph: GraphState) -> GraphState:
+            nonlocal stage
+            stage = "planner"
             state = graph["data"]
             if state["next"] != "planner":
                 return graph
@@ -299,18 +307,19 @@ class DiagnosticRunner:
             ):
                 raise DiagnosticFailure("DIAGNOSTIC_KNOWLEDGE_FAILED")
             await self.progress(context, "Planner：发现当前用户启用的真实 MCP 工具。", 0.1)
+            stage = "mcp_discovery"
             registered = await tools()
             if not any(is_search_log(name) for name in registered):
                 raise DiagnosticFailure("SYSTEM_UNAVAILABLE")
-            alerts = await self.alerts()
-            selected = [
-                item
-                for item in alerts.items
-                if (
-                    not body.get("alertNames")
-                    or item.alertname in cast(list[str], body["alertNames"])
-                )
-            ]
+            selected = []
+            if body.get("alertNames"):
+                stage = "alerts_read"
+                alerts = await self.alerts()
+                selected = [
+                    item for item in alerts.items
+                    if item.alertname in cast(list[str], body["alertNames"])
+                ]
+            stage = "planner"
             async with self.repo.fenced(context) as db:
                 for alert in selected:
                     alert_id = await self.repo.insert(
@@ -395,6 +404,8 @@ class DiagnosticRunner:
             return {"data": state}
 
         async def executor(graph: GraphState) -> GraphState:
+            nonlocal stage
+            stage = "executor"
             state = graph["data"]
             if state["next"] != "executor":
                 return graph
@@ -460,6 +471,8 @@ class DiagnosticRunner:
             return {"data": state}
 
         async def replanner(graph: GraphState) -> GraphState:
+            nonlocal stage
+            stage = "replanner"
             state = graph["data"]
             if state["next"] != "replanner":
                 return graph
@@ -534,6 +547,8 @@ class DiagnosticRunner:
             return {"data": state}
 
         async def report(graph: GraphState) -> GraphState:
+            nonlocal stage
+            stage = "report"
             state = graph["data"]
             await build_report(self, context, state)
             return {"data": state}
@@ -572,6 +587,7 @@ class DiagnosticRunner:
                 {"data": initial}, {"recursion_limit": MAX_STEPS * 3 + 8}
             )
         except Exception as exc:
+            log_failure(logger, stage, exc)
             code = str(exc) if isinstance(exc, DiagnosticFailure) else "DIAGNOSTIC_EXECUTION_FAILED"
             await context.emit("diagnostic.error", {"code": code})
             raise DiagnosticFailure(code) from None

@@ -22,7 +22,7 @@
     "frontend:test": "npm run test --workspace @super-ai/frontend",
     "frontend:build": "npm run build --workspace @super-ai/frontend",
     "frontend:security": "node scripts/check-public-config.mjs",
-    "frontend:desktop": "node scripts/check-desktop.mjs",
+    "frontend:desktop": "node scripts/check-desktop.mjs && node scripts/check-aiops-desktop.mjs",
     "foundation:test": "node --test scripts/foundation.test.mjs",
     "docs:dev": "npm run dev --workspace @super-ai/docs",
     "docs:build": "npm run build --workspace @super-ai/docs",

@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, cast
@@ -9,10 +10,13 @@ from super_ai.mcp_contracts import ConnectionInput, DiscoveredTool, McpConnectio
 from super_ai.mcp_logging import private_transport_logs
 from super_ai.memory.sqlite.mcp import McpRepository
 from super_ai.project_config import JsonObject
+from super_ai.safe_logging import log_failure
 from super_ai.tenant import OwnerScope
 
 if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
+
+logger = logging.getLogger(__name__)
 
 Discover = Callable[[ConnectionInput], Awaitable[list["BaseTool"]]]
 
@@ -100,9 +104,11 @@ class McpProvider:
         for _ in range(body.retries + 1):
             try:
                 return await asyncio.wait_for(self._discover(body), body.timeoutSeconds)
-            except asyncio.TimeoutError:
+            except asyncio.TimeoutError as exc:
+                log_failure(logger, "mcp_discovery_timeout", exc)
                 code = "MCP_TIMEOUT"
-            except Exception:
+            except Exception as exc:
+                log_failure(logger, "mcp_discovery_transport", exc)
                 code = "MCP_DISCOVERY_FAILED"
         raise McpFailure(code) from None
 
